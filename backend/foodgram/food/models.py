@@ -111,6 +111,8 @@ class Recipe(models.Model):
     class Meta:
         """Meta-класс для модели Recipe."""
 
+        verbose_name = 'Рецепт'
+        verbose_name_plural = 'Рецепты'
         ordering = ['-created_at']
 
     def clean(self):
@@ -185,6 +187,13 @@ class Profile(models.Model):
         blank=True,
         null=True
     )
+
+    class Meta:
+        """Meta-класс для модели Profile."""
+
+        verbose_name = 'Профиль'
+        verbose_name_plural = 'Профили'
+        ordering = ['user']
 
 
 class Follow(models.Model):
