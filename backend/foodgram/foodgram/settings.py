@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'djoser',
     'food.apps.FoodConfig',
+    'api.apps.ApiConfig',
 ]
 
 MIDDLEWARE = [
