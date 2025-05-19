@@ -22,13 +22,18 @@ class Tag(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели Tag."""
+        """Мета-класс для модели Tag.
+
+        Определяет метаданные модели:
+        - Название в единственном и множественном числе
+        - Порядок сортировки по умолчанию
+        """
 
         verbose_name = 'Тег'
         verbose_name_plural = 'Теги'
         ordering = ['name']
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Возвращает строковое представление имени тега."""
         return self.name
 
@@ -48,7 +53,12 @@ class Ingredient(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели Ingredient."""
+        """Мета-класс для модели Ingredient.
+
+        Определяет:
+        - Ограничения уникальности
+        - Названия в админке
+        """
 
         constraints = [
             models.UniqueConstraint(
@@ -59,7 +69,7 @@ class Ingredient(models.Model):
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Возвращает строковое представление имени ингредиента."""
         return f'{self.name} ({self.measurement_unit})'
 
@@ -109,14 +119,19 @@ class Recipe(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели Recipe."""
+        """Мета-класс для модели Recipe.
+
+        Определяет:
+        - Названия в админке
+        - Порядок сортировки по умолчанию
+        """
 
         verbose_name = 'Рецепт'
         verbose_name_plural = 'Рецепты'
         ordering = ['-created_at']
 
-    def clean(self):
-        """Выполняет валидацию ингридиентов и тегов."""
+    def clean(self) -> None:
+        """Выполняет валидацию ингридиентов и тегов перед сохранением."""
         if not self.ingredients.exists():
             raise ValidationError(
                 'Рецепт должен содержать хотя бы один ингредиент'
@@ -126,17 +141,13 @@ class Recipe(models.Model):
                 'Рецепт должен содержать хотя бы один тег'
             )
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Возвращает строковое представление названия рецепта."""
         return self.name
 
 
 class RecipeIngredient(models.Model):
-    """
-    Модель, связывающая рецепты и ингредиенты.
-
-    Позволяет указать количество каждого ингредиента.
-    """
+    """Модель, связывающая рецепты и ингредиенты с указанием количества."""
 
     recipe = models.ForeignKey(
         Recipe,
@@ -158,25 +169,30 @@ class RecipeIngredient(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели RecipeIngredient."""
+        """Мета-класс для модели RecipeIngredient.
 
-        unique_together = ('recipe', 'ingredient')
+        Определяет:
+        - Ограничения уникальности
+        - Названия в админке
+        """
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipe', 'ingredient'],
+                name='unique_recipe_ingredient'
+            )
+        ]
         verbose_name = 'Ингредиент рецепта'
         verbose_name_plural = 'Ингредиенты рецептов'
 
-    def __str__(self):
-        """
-        Возвращает строковое представление объекта RecipeIngredient.
-
-        Объект RecipeIngredient показывает количество, единицу
-        измерения и название ингредиента для указанного рецепта.
-        """
-        return (f'{self.quantity} {self.ingredient.measurement_unit}'
-                f' {self.ingredient.name} для рецепта {self.recipe.name}')
+    def __str__(self) -> str:
+        """Возвращает строковое представление связи рецепта и ингредиента."""
+        return (f'{self.quantity} {self.ingredient.measurement_unit} '
+                f'{self.ingredient.name} для рецепта {self.recipe.name}')
 
 
 class Profile(models.Model):
-    """Модель для представления профиля пользователя."""
+    """Модель профиля пользователя для хранения дополнительных данных."""
 
     user = models.OneToOneField(
         User,
@@ -190,19 +206,24 @@ class Profile(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели Profile."""
+        """Мета-класс для модели Profile.
+
+        Определяет:
+        - Названия в админке
+        - Порядок сортировки
+        """
 
         verbose_name = 'Профиль'
         verbose_name_plural = 'Профили'
         ordering = ['user']
 
+    def __str__(self) -> str:
+        """Возвращает строковое представление профиля."""
+        return f'Профиль пользователя {self.user.username}'
+
 
 class Follow(models.Model):
-    """
-    Модель для представления подписки пользователя на другого пользователя.
-
-    Пользователь не может подписаться на самого себя.
-    """
+    """Модель подписки пользователей друг на друга."""
 
     user = models.ForeignKey(
         User,
@@ -218,7 +239,12 @@ class Follow(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели Follow."""
+        """Мета-класс для модели Follow.
+
+        Определяет:
+        - Ограничения уникальности
+        - Названия в админке
+        """
 
         constraints = [
             models.UniqueConstraint(
@@ -229,21 +255,21 @@ class Follow(models.Model):
         verbose_name = 'Подписка'
         verbose_name_plural = 'Подписки'
 
-    def clean(self):
-        """Выполняет валидацию подписки на самого себя."""
+    def clean(self) -> None:
+        """Проверяет, что пользователь не подписывается на самого себя."""
         if self.user == self.following:
             raise ValidationError(
                 'Пользователь не может подписаться на самого себя'
             )
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Возвращает строковое представление подписки."""
         return (f'Пользователь {self.user.username} '
-                f'подписан на пользователя {self.following.username}')
+                f'подписан на {self.following.username}')
 
 
 class Favorite(models.Model):
-    """Модель для представления рецепта в разделе "Избранное"."""
+    """Модель для хранения избранных рецептов пользователей."""
 
     user = models.ForeignKey(
         User,
@@ -258,25 +284,30 @@ class Favorite(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели Favorite."""
+        """Мета-класс для модели Favorite.
+
+        Определяет:
+        - Ограничения уникальности
+        - Названия в админке
+        """
 
         constraints = [
             models.UniqueConstraint(
                 fields=['user', 'favorite'],
-                name='unique_favotite'
+                name='unique_favorite'
             )
         ]
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранное'
 
-    def __str__(self):
-        """Возвращает строковое представление избранного."""
+    def __str__(self) -> str:
+        """Возвращает строковое представление избранного рецепта."""
         return (f'Пользователь {self.user.username} '
-                f'добавил в избранное рецепт {self.favorite.name}')
+                f'добавил в избранное {self.favorite.name}')
 
 
 class ShoppingCart(models.Model):
-    """Модель для представления рецепта в списке покупок."""
+    """Модель для хранения рецептов в списке покупок пользователя."""
 
     user = models.ForeignKey(
         User,
@@ -291,7 +322,12 @@ class ShoppingCart(models.Model):
     )
 
     class Meta:
-        """Meta-класс для модели ShoppingCart."""
+        """Мета-класс для модели ShoppingCart.
+
+        Определяет:
+        - Ограничения уникальности
+        - Названия в админке
+        """
 
         constraints = [
             models.UniqueConstraint(
@@ -302,7 +338,7 @@ class ShoppingCart(models.Model):
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Возвращает строковое представление списка покупок."""
         return (f'Пользователь {self.user.username} '
-                f'добавил в список покупок рецепт {self.recipe.name}')
+                f'добавил в список покупок {self.recipe.name}')
