@@ -1,9 +1,15 @@
 from django.contrib import admin
-from django.contrib.auth import get_user_model
-from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
-                         RecipeIngredient, ShoppingCart, Tag)
 
-User = get_user_model()
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Profile,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart,
+    Tag,
+)
 
 
 @admin.register(Tag)

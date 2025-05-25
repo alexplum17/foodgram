@@ -1,8 +1,8 @@
 import base64
 from typing import Any, Dict, List, Optional, Union
 
-from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from food.models import (
     Favorite,
     Follow,
@@ -11,10 +11,9 @@ from food.models import (
     RecipeIngredient,
     ShoppingCart,
     Tag,
+    User,
 )
 from rest_framework import serializers
-
-User = get_user_model()
 
 
 class Base64ImageField(serializers.ImageField):
@@ -131,6 +130,12 @@ class IngredientSerializer(serializers.ModelSerializer):
 
         model = Ingredient
         fields = ('id', 'name', 'measurement_unit')
+
+
+class UserCreateSerializer(BaseUserCreateSerializer):
+    class Meta(BaseUserCreateSerializer.Meta):
+        model = User
+        fields = ('email', 'username', 'password', 'first_name', 'last_name')
 
 
 class UserSerializer(serializers.ModelSerializer):

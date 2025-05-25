@@ -147,6 +147,7 @@ REST_FRAMEWORK = {
 
 DJOSER = {
     'SERIALIZERS': {
+        'user_create': 'api.serializers.UserCreateSerializer',
         'user': 'api.serializers.UserSerializer',
         'current_user': 'api.serializers.UserSerializer',
     },
@@ -158,3 +159,5 @@ DJOSER = {
     'LOGIN_FIELD': 'email',
     'USER_ID_FIELD': 'id',
 }
+
+AUTH_USER_MODEL = 'food.User'

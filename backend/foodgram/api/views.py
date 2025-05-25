@@ -1,10 +1,9 @@
 from io import BytesIO
 
-from django.contrib.auth import get_user_model
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from djoser.views import UserViewSet as DjoserUserViewSet
-from food.models import Favorite, Follow, Ingredient, Recipe, ShoppingCart, Tag
+from food.models import Favorite, Follow, Ingredient, Recipe, ShoppingCart, Tag, User
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -23,8 +22,6 @@ from api.serializers import (
     TagSerializer,
     UserSerializer,
 )
-
-User = get_user_model()
 
 
 class UserViewSet(DjoserUserViewSet):
