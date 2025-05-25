@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 
 User = get_user_model()
@@ -10,7 +10,7 @@ class Tag(models.Model):
     """Модель тега, используемого для категоризации рецептов."""
 
     name = models.CharField(
-        max_length=100,
+        max_length=32,
         unique=True,
         verbose_name='Название тега',
         help_text='Введите название тега.',
@@ -18,7 +18,12 @@ class Tag(models.Model):
     slug = models.SlugField(
         unique=True,
         verbose_name='Уникальный идентификатор',
-        help_text='Введите уникальный идентификатор тега (латиница, цифры)'
+        help_text='Введите уникальный идентификатор тега',
+        max_length=32,
+        validators=[RegexValidator(
+            regex='^[-a-zA-Z0-9_]+$',
+            message='Разрешены только цифры и буквы'
+        )]
     )
 
     class Meta:

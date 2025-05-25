@@ -35,6 +35,15 @@ class Base64ImageField(serializers.ImageField):
         return self.context['request'].build_absolute_uri(value.url)
 
 
+class AvatarUpdateSerializer(serializers.Serializer):
+    avatar = Base64ImageField()
+
+    def update(self, instance, validated_data):
+        instance.profile.avatar = validated_data['avatar']
+        instance.profile.save()
+        return instance
+
+
 class IsFavoritedField(serializers.Field):
     """Кастомное поле для проверки, находится ли рецепт в избранном."""
 
@@ -273,6 +282,13 @@ class RecipeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Добавьте хотя бы один тег')
         return value
 
+    def validate_cooking_time(self, value):
+        if value < 1:
+            raise serializers.ValidationError(
+                'Время приготовления должно быть не менее 1 минуты'
+            )
+        return value
+
 
 class FavoriteSerializer(serializers.ModelSerializer):
     """Сериализатор для избранных рецептов."""
@@ -367,3 +383,10 @@ class FollowSerializer(serializers.ModelSerializer):
             'recipes_count',
             'avatar'
         )
+
+    def validate(self, data):
+        if self.context['request'].user == data['following']:
+            raise serializers.ValidationError(
+                'Нельзя подписаться на самого себя'
+            )
+        return data
