@@ -1,6 +1,7 @@
 import base64
 from typing import Any, Dict, List, Optional, Union
 
+from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from food.models import (
@@ -13,7 +14,7 @@ from food.models import (
     Tag,
     User,
 )
-from rest_framework import serializers
+from rest_framework import serializers, status
 
 
 class Base64ImageField(serializers.ImageField):
@@ -31,7 +32,10 @@ class Base64ImageField(serializers.ImageField):
         """Возвращает полный URL изображения."""
         if not value:
             return None
-        return self.context['request'].build_absolute_uri(value.url)
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(value.url)
+        return value.url
 
 
 class AvatarUpdateSerializer(serializers.Serializer):
@@ -133,16 +137,95 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
+    first_name = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        max_length=150
+    )
+    last_name = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        max_length=150
+    )
+    email = serializers.EmailField(
+        required=True,
+        max_length=254
+    )
+    username = serializers.CharField(
+        max_length=150,
+        validators=[AbstractUser.username_validator]
+    )
+
     class Meta(BaseUserCreateSerializer.Meta):
         model = User
-        fields = ('email', 'username', 'password', 'first_name', 'last_name')
+        fields = (
+            'email',
+            'id',
+            'username',
+            'first_name',
+            'last_name',
+            'password'
+        )
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+
+    def validate(self, data):
+        required_fields = ['email', 'first_name', 'last_name']
+        for field in required_fields:
+            if not data.get(field):
+                raise serializers.ValidationError(
+                    {field: 'Это поле обязательно для заполнения.'},
+                    code=status.HTTP_400_BAD_REQUEST
+                )
+            if field in ['first_name', 'last_name'] and not data[field
+                                                                 ].strip():
+                raise serializers.ValidationError(
+                    {field: 'Это поле не может быть пустым.'},
+                    code=status.HTTP_400_BAD_REQUEST
+                )
+        if User.objects.filter(email=data['email']).exists():
+            raise serializers.ValidationError(
+                {'email': 'Пользователь с таким email уже существует.'},
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        return data
+
+    def validate_username(self, value):
+        if not value.strip():
+            raise serializers.ValidationError(
+                'Имя пользователя не может быть пустым.',
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        if len(value) > 150:
+            raise serializers.ValidationError(
+                'Имя пользователя не может превышать 150 символов.',
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        return value.strip()
+
+    def validate_email(self, value):
+        if len(value) > 254:
+            raise serializers.ValidationError(
+                'Email не может превышать 254 символа.',
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        return value
+
+    def validate_password(self, value):
+        if not value.strip():
+            raise serializers.ValidationError(
+                'Пароль не может быть пустым.',
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        return value
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователей."""
 
     is_subscribed = IsFollowedField(default=True)
-    avatar = Base64ImageField(source='profile.avatar')
+    avatar = Base64ImageField(source='profile.avatar', required=False)
 
     class Meta:
         """Мета-класс для настройки сериализатора пользователей.
@@ -227,47 +310,51 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: Dict[str, Any]) -> Recipe:
         """Создает новый рецепт с ингредиентами и тегами."""
-        if (
-            'recipe_ingredients' not in self.initial_data
-        ) or ('tags' not in self.initial_data):
+        ingredients_data = self.initial_data.get('ingredients', [])
+        tags_data = self.initial_data.get('tags', [])
+        if not ingredients_data:
             raise serializers.ValidationError(
-                'Отсутствуют ингредиенты или теги!'
-            )
-        ingredients_data = validated_data.pop('recipe_ingredients')
-        tags_data = validated_data.pop('tags')
+                {'ingredients': 'Добавьте хотя бы один ингредиент'})
+        if not tags_data:
+            raise serializers.ValidationError(
+                {'tags': 'Добавьте хотя бы один тег'})
+        validated_data.pop('recipe_ingredients', None)
+        validated_data.pop('tags', None)
         recipe = Recipe.objects.create(
             author=self.context['request'].user,
             **validated_data
         )
-        for ingredient in ingredients_data:
+        for ingredient_data in ingredients_data:
             RecipeIngredient.objects.create(
                 recipe=recipe,
-                ingredient_id=ingredient['ingredient']['id'],
-                quantity=ingredient['quantity']
+                ingredient_id=ingredient_data['id'],
+                quantity=ingredient_data['amount']
             )
         recipe.tags.set(tags_data)
         return recipe
 
-    def update(
-            self, instance: Recipe, validated_data: Dict[str, Any]) -> Recipe:
+    def update(self, instance: Recipe, validated_data: Dict[str, Any]
+               ) -> Recipe:
         """Обновляет существующий рецепт."""
         if self.context['request'].user != instance.author:
             raise serializers.ValidationError(
                 'У вас нет прав редактировать рецепт'
             )
-        ingredients_data = validated_data.pop('recipe_ingredients', None)
-        tags_data = validated_data.pop('tags', None)
+        ingredients_data = self.initial_data.get('ingredients', [])
+        tags_data = self.initial_data.get('tags', [])
+        validated_data.pop('recipe_ingredients', None)
+        validated_data.pop('tags', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        if tags_data is not None:
+        if tags_data:
             instance.tags.set(tags_data)
-        if ingredients_data is not None:
+        if ingredients_data:
             instance.recipe_ingredients.all().delete()
-            for ingredient in ingredients_data:
+            for ingredient_data in ingredients_data:
                 RecipeIngredient.objects.create(
                     recipe=instance,
-                    ingredient_id=ingredient['ingredient']['id'],
-                    quantity=ingredient['quantity']
+                    ingredient_id=ingredient_data['id'],
+                    quantity=ingredient_data['amount']
                 )
         instance.save()
         return instance

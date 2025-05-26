@@ -9,6 +9,7 @@ from food.models import (
     RecipeIngredient,
     ShoppingCart,
     Tag,
+    User,
 )
 
 
@@ -37,6 +38,7 @@ class RecipeAdmin(admin.ModelAdmin):
     search_fields = ('name', 'author__username')
     list_filter = ('tags',)
     inlines = (RecipeIngredientInline,)
+    filter_horizontal = ('tags',)
     empty_value_display = '-пусто-'
 
     def favorite_count(self, obj):
@@ -77,4 +79,17 @@ class ShoppingCartAdmin(admin.ModelAdmin):
     list_display = ('user', 'recipe')
     search_fields = ('user__username', 'recipe__name')
     empty_value_display = '-пусто-'
+
+
+@admin.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ('username',
+                    'email',
+                    'first_name',
+                    'last_name',
+                    'is_staff',
+                    'is_active'
+                    )
+    search_fields = ('username', 'email', 'first_name', 'last_name')
+    list_filter = ('is_staff', 'is_active')
     empty_value_display = '-пусто-'

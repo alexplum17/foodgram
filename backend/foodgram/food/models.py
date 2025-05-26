@@ -5,9 +5,7 @@ from django.db import models
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, username, email, password=None, **extra_fields):
-        if not email:
-            raise ValueError('Электронная почта обязательна')
+    def create_user(self, username, email, password, **extra_fields):
         email = self.normalize_email(email)
         user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
@@ -20,11 +18,42 @@ class UserManager(BaseUserManager):
         return self.create_user(username, email, password, **extra_fields)
 
 class User(AbstractUser):
+    username = models.CharField(
+        max_length=150,
+        blank=False,
+        unique=True,
+        help_text='Обязательное поле. Максимум 150 символов.',
+        validators=[AbstractUser.username_validator],
+        error_messages={
+            'unique': 'Пользователь с таким именем уже существует.',
+        },
+    )
+    email = models.EmailField(
+        max_length=254,
+        blank=False,
+        unique=True,
+        verbose_name='Электронная почта'
+    )
+    first_name = models.CharField(
+        max_length=150,
+        blank=False,
+        verbose_name='Имя'
+    )
+    last_name = models.CharField(
+        max_length=150,
+        blank=False,
+        verbose_name='Фамилия'
+    )
     objects = UserManager()
 
     class Meta:
         app_label = 'food'
         swappable = 'AUTH_USER_MODEL'
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
+
+    def __str__(self):
+        return f"{self.username} ({self.first_name} {self.last_name})"
 
 
 class Tag(models.Model):
