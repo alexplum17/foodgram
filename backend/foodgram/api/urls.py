@@ -1,5 +1,4 @@
 from django.urls import include, path
-from djoser.views import UserViewSet
 from rest_framework.routers import DefaultRouter
 
 from api.views import (
@@ -9,6 +8,7 @@ from api.views import (
     RecipeViewSet,
     ShoppingCartViewSet,
     TagViewSet,
+    UserViewSet,
 )
 
 app_name = 'api'

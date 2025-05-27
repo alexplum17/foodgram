@@ -42,7 +42,7 @@ from api.serializers import (
 
 
 class UserViewSet(DjoserUserViewSet):
-    http_method_names = ['get', 'post', 'put', 'del']
+    http_method_names = ['get', 'post', 'put', 'delete']
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_serializer_class(self):
@@ -114,7 +114,7 @@ class UserViewSet(DjoserUserViewSet):
         self.request.user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=False, methods=['put', 'delete'], url_path='me/avatar', 
+    @action(detail=False, methods=['put', 'delete'], url_path='me/avatar',
             permission_classes=[IsAuthenticated])
     def avatar(self, request):
         # Изменение аватара только для авторизованных
@@ -155,6 +155,7 @@ class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     http_method_names = ['get']
+    pagination_class = None
 
 
 class IngredientViewSet(viewsets.ModelViewSet):
@@ -164,6 +165,7 @@ class IngredientViewSet(viewsets.ModelViewSet):
     serializer_class = IngredientSerializer
     http_method_names = ['get']
     search_fields = ['=name']
+    pagination_class = None
 
     def get_queryset(self):
         queryset = self.queryset
@@ -186,6 +188,11 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.prefetch_related('tags', 'ingredients')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def get_permissions(self):
         """Определяет уровень доступа для разных действий."""

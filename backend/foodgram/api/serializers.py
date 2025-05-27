@@ -275,13 +275,13 @@ class RecipeSerializer(serializers.ModelSerializer):
     """Сериализатор для рецептов."""
 
     tags = TagSerializer(many=True)
-    author = UserSerializer()
+    author = UserSerializer(read_only=True)
     ingredients = RecipeIngredientSerializer(
         many=True,
         source='recipe_ingredients'
     )
-    is_favorited = IsFavoritedField()
-    is_in_shopping_cart = IsInShoppingCartField()
+    is_favorited = IsFavoritedField(read_only=True)
+    is_in_shopping_cart = IsInShoppingCartField(read_only=True)
     image = Base64ImageField()
 
     class Meta:
