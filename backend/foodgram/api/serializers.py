@@ -251,12 +251,13 @@ class UserSerializer(serializers.ModelSerializer):
 class RecipeIngredientSerializer(serializers.ModelSerializer):
     """Сериализатор для связи рецепта и ингредиента."""
 
-    id = serializers.ReadOnlyField(source='ingredient.id')
-    name = serializers.ReadOnlyField(source='ingredient.name')
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
+    name = serializers.ReadOnlyField(source='ingredient.name', read_only=True)
     measurement_unit = serializers.ReadOnlyField(
-        source='ingredient.measurement_unit'
+        source='ingredient.measurement_unit',
+        read_only=True
     )
-    amount = serializers.IntegerField(source='quantity')
+    amount = serializers.IntegerField()
 
     class Meta:
         """Мета-класс для настройки сериализатора связи рецепта и ингредиента.
@@ -274,7 +275,10 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 class RecipeSerializer(serializers.ModelSerializer):
     """Сериализатор для рецептов."""
 
-    tags = TagSerializer(many=True)
+    tags = serializers.PrimaryKeyRelatedField(
+        queryset=Tag.objects.all(),
+        many=True
+    )
     author = UserSerializer(read_only=True)
     ingredients = RecipeIngredientSerializer(
         many=True,
@@ -308,53 +312,59 @@ class RecipeSerializer(serializers.ModelSerializer):
             'cooking_time'
         )
 
-    def create(self, validated_data: Dict[str, Any]) -> Recipe:
-        """Создает новый рецепт с ингредиентами и тегами."""
-        ingredients_data = self.initial_data.get('ingredients', [])
-        tags_data = self.initial_data.get('tags', [])
-        if not ingredients_data:
-            raise serializers.ValidationError(
-                {'ingredients': 'Добавьте хотя бы один ингредиент'})
+    def to_representation(self, instance):
+        """Переопределяем представление для правильного отображения тегов"""
+        representation = super().to_representation(instance)
+        representation['tags'] = TagSerializer(
+            instance.tags.all(),
+            many=True
+        ).data
+        representation['is_favorited'
+                       ] = IsFavoritedField().to_representation(instance)
+        representation['is_in_shopping_cart'
+                       ] = IsInShoppingCartField().to_representation(instance)
+        return representation
+
+    def create(self, validated_data):
+        tags_data = validated_data.pop('tags', [])
+        ingredients_data = validated_data.pop('recipe_ingredients', [])
+
         if not tags_data:
             raise serializers.ValidationError(
-                {'tags': 'Добавьте хотя бы один тег'})
-        validated_data.pop('recipe_ingredients', None)
-        validated_data.pop('tags', None)
+                {'tags': 'Добавьте хотя бы один тег'}
+            )
+        if not ingredients_data:
+            raise serializers.ValidationError(
+                {'ingredients': 'Добавьте хотя бы один ингредиент'}
+            )
+
         recipe = Recipe.objects.create(
             author=self.context['request'].user,
             **validated_data
         )
+        recipe.tags.set(tags_data)
         for ingredient_data in ingredients_data:
             RecipeIngredient.objects.create(
                 recipe=recipe,
-                ingredient_id=ingredient_data['id'],
-                quantity=ingredient_data['amount']
+                ingredient=ingredient_data['id'],
+                amount=ingredient_data['amount']
             )
-        recipe.tags.set(tags_data)
         return recipe
 
-    def update(self, instance: Recipe, validated_data: Dict[str, Any]
-               ) -> Recipe:
-        """Обновляет существующий рецепт."""
-        if self.context['request'].user != instance.author:
-            raise serializers.ValidationError(
-                'У вас нет прав редактировать рецепт'
-            )
-        ingredients_data = self.initial_data.get('ingredients', [])
-        tags_data = self.initial_data.get('tags', [])
-        validated_data.pop('recipe_ingredients', None)
-        validated_data.pop('tags', None)
+    def update(self, instance, validated_data):
+        tags_data = validated_data.pop('tags', None)
+        ingredients_data = validated_data.pop('recipe_ingredients', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        if tags_data:
+        if tags_data is not None:
             instance.tags.set(tags_data)
-        if ingredients_data:
+        if ingredients_data is not None:
             instance.recipe_ingredients.all().delete()
             for ingredient_data in ingredients_data:
                 RecipeIngredient.objects.create(
                     recipe=instance,
-                    ingredient_id=ingredient_data['id'],
-                    quantity=ingredient_data['amount']
+                    ingredient=ingredient_data['id'],
+                    amount=ingredient_data['amount']
                 )
         instance.save()
         return instance

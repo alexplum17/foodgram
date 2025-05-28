@@ -217,7 +217,7 @@ class RecipeIngredient(models.Model):
         verbose_name='Ингредиент',
         help_text='Выберите ингредиент.'
     )
-    quantity = models.PositiveIntegerField(
+    amount = models.PositiveIntegerField(
         verbose_name='Количество',
         validators=[MinValueValidator(1)],
         help_text='Введите количество ингредиента (больше 0).'
@@ -242,7 +242,7 @@ class RecipeIngredient(models.Model):
 
     def __str__(self) -> str:
         """Возвращает строковое представление связи рецепта и ингредиента."""
-        return (f'{self.quantity} {self.ingredient.measurement_unit} '
+        return (f'{self.amount} {self.ingredient.measurement_unit} '
                 f'{self.ingredient.name} для рецепта {self.recipe.name}')
 
 

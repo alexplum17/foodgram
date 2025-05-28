@@ -68,7 +68,6 @@ class UserViewSet(DjoserUserViewSet):
                 # Если limit не является числом,
                 # используем значение по умолчанию
                 pass
-
         return self.paginator.paginate_queryset(
             queryset, self.request, view=self)
 
@@ -188,6 +187,27 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.prefetch_related('tags', 'ingredients')
+
+    def paginate_queryset(self, queryset):
+        """
+        Переопределяем пагинацию для поддержки параметра 'limit'
+        """
+        if self.paginator is None:
+            return None
+        limit = self.request.query_params.get('limit')
+        if limit is not None:
+            try:
+                limit = int(limit)
+                if limit > 0:
+                    max_limit = getattr(settings, 'MAX_PAGE_SIZE', 100)
+                    limit = min(limit, max_limit)
+                    self.paginator.page_size = limit
+            except (ValueError, TypeError):
+                # Если limit не является числом,
+                # используем значение по умолчанию
+                pass
+        return self.paginator.paginate_queryset(
+            queryset, self.request, view=self)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -399,7 +419,7 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         for item in shopping_cart:
             for ri in item.recipe.recipe_ingredients.all():
                 key = (ri.ingredient.name, ri.ingredient.measurement_unit)
-                ingredients[key] += ri.quantity
+                ingredients[key] += ri.amount
 
         if not ingredients:
             return Response(
