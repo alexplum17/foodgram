@@ -6,7 +6,7 @@ import reportlab
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
 from food.models import (
@@ -19,6 +19,7 @@ from food.models import (
     Tag,
     User,
 )
+from hashids import Hashids
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -40,6 +41,7 @@ from api.serializers import (
     UserSerializer,
 )
 
+hashids = Hashids(salt="your-secret-salt", min_length=3)
 
 class UserViewSet(DjoserUserViewSet):
     http_method_names = ['get', 'post', 'put', 'delete']
@@ -188,6 +190,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         return queryset.prefetch_related('tags', 'ingredients')
 
+    @action(detail=True, methods=['get'], url_path='get-link')
+    def get_link(self, request, pk=None):
+        """Создает короткую ссылку"""
+        recipe = self.get_object()
+        short_code = hashids.encode(recipe.id)
+        short_url = f'{settings.SITE_DOMAIN}/s/{short_code}'
+        return Response({'short-link': short_url})
+
     def paginate_queryset(self, queryset):
         """
         Переопределяем пагинацию для поддержки параметра 'limit'
@@ -238,7 +248,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Вы можете удалять только свои рецепты')
         instance.delete()
 
-    @action(detail=True, methods=['post', 'delete'], 
+    @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
         """Добавление/удаление рецепта из избранного, для авторизованных"""
@@ -270,7 +280,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             favorite.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post', 'delete'], 
+    @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def shopping_cart(self, request, pk=None):
         """Добавление/удаление рецепта из списка покупок, для авторизованных"""
