@@ -365,23 +365,32 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Обновляет рецепт, теги и ингредиенты."""
-        tags_data = validated_data.pop('tags', None)
-        ingredients_data = validated_data.pop('recipe_ingredients', None)
-        
-        # Обновляем базовые поля
+        tags_data = validated_data.pop('tags')
+        ingredients_data = validated_data.pop('recipe_ingredients')
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        
-        # Обновляем теги (если переданы)
-        if tags_data is not None:
-            instance.tags.set(tags_data)
-        
-        # Обновляем ингредиенты (если переданы)
-        if ingredients_data is not None:
-            self._process_ingredients(instance, ingredients_data)
-        
+        instance.tags.set(tags_data)
+        self._process_ingredients(instance, ingredients_data)
         return instance
+
+    def validate(self, data):
+        if self.context['request'].method == 'PATCH':
+            if 'tags' not in data and 'recipe_ingredients' not in data:
+                raise serializers.ValidationError(
+                    'Для обновления рецепта необходимо указать'
+                    'как теги, так и ингредиенты.'
+                )
+            if 'tags' not in data:
+                raise serializers.ValidationError(
+                    {'tags': 'Это поле обязательно при обновлении рецепта.'}
+                )
+            if 'recipe_ingredients' not in data:
+                raise serializers.ValidationError(
+                    {'ingredients':
+                     'Это поле обязательно при обновлении рецепта.'}
+                )
+        return data
 
     def validate_ingredients(
             self, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
