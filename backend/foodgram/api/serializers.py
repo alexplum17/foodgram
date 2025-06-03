@@ -497,7 +497,7 @@ class FollowSerializer(serializers.ModelSerializer):
         recipes = obj.following.recipes.order_by('-created_at')
         if request:
             recipes_limit = request.query_params.get('recipes_limit', 3)
-            if recipes_limit and recipes_limit.isdigit():
+            if recipes_limit and str(recipes_limit).isdigit():
                 recipes = recipes[:int(recipes_limit)]
         return RecipeFollowFieldSerializer(
             recipes,

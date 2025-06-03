@@ -335,6 +335,37 @@ class FollowViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Follow.objects.filter(user=self.request.user)
 
+    def list(self, request, *args, **kwargs):
+        """Переопределяет list при отсутствии подписок."""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def paginate_queryset(self, queryset):
+        """
+        Переопределяем пагинацию для поддержки параметра 'limit'
+        """
+        if self.paginator is None:
+            return None
+        limit = self.request.query_params.get('limit')
+        if limit is not None:
+            try:
+                limit = int(limit)
+                if limit > 0:
+                    max_limit = getattr(settings, 'MAX_PAGE_SIZE', 100)
+                    limit = min(limit, max_limit)
+                    self.paginator.page_size = limit
+            except (ValueError, TypeError):
+                # Если limit не является числом,
+                # используем значение по умолчанию
+                pass
+        return self.paginator.paginate_queryset(
+            queryset, self.request, view=self)
+
     def create(self, request, *args, **kwargs):
         following_id = kwargs.get('id')
         following = get_object_or_404(User, id=following_id)
