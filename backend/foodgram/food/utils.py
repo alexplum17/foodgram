@@ -20,5 +20,5 @@ def custom_exception_handler(exc, context):
             f"404 Not Found - {context['request'].method} {context[
                 'request'].path}"
         )
-    
+
     return response

@@ -247,6 +247,12 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar'
         )
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['is_subscribed'
+                       ] = IsFollowedField().to_representation(instance)
+        return representation
+
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):
     """Сериализатор для связи рецепта и ингредиента."""
@@ -270,6 +276,15 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
         model = RecipeIngredient
         fields = ('id', 'name', 'measurement_unit', 'amount')
+
+    def validate_amount(
+            self, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Проверяет, что количество игредиентов не меньше одного."""
+        if value < 1:
+            raise serializers.ValidationError(
+                'Количество ингредиентов не может быть меньше одного'
+            )
+        return value
 
 
 class RecipeSerializer(serializers.ModelSerializer):
@@ -319,69 +334,86 @@ class RecipeSerializer(serializers.ModelSerializer):
             instance.tags.all(),
             many=True
         ).data
-        representation['is_favorited'
-                       ] = IsFavoritedField().to_representation(instance)
-        representation['is_in_shopping_cart'
-                       ] = IsInShoppingCartField().to_representation(instance)
+        representation['is_favorited'] = IsFavoritedField(
+        ).to_representation(instance)
+        representation['is_in_shopping_cart'] = IsInShoppingCartField(
+        ).to_representation(instance)
         return representation
 
-    def create(self, validated_data):
-        tags_data = validated_data.pop('tags', [])
-        ingredients_data = validated_data.pop('recipe_ingredients', [])
-
-        if not tags_data:
-            raise serializers.ValidationError(
-                {'tags': 'Добавьте хотя бы один тег'}
-            )
-        if not ingredients_data:
-            raise serializers.ValidationError(
-                {'ingredients': 'Добавьте хотя бы один ингредиент'}
-            )
-
-        recipe = Recipe.objects.create(
-            author=self.context['request'].user,
-            **validated_data
-        )
-        recipe.tags.set(tags_data)
-        for ingredient_data in ingredients_data:
-            RecipeIngredient.objects.create(
+    def _process_ingredients(self, recipe, ingredients_data):
+        """Обрабатывает ингредиенты (создание/обновление)."""
+        recipe.recipe_ingredients.all().delete()  # Удаляем старые ингредиенты
+        RecipeIngredient.objects.bulk_create([
+            RecipeIngredient(
                 recipe=recipe,
                 ingredient=ingredient_data['id'],
                 amount=ingredient_data['amount']
             )
+            for ingredient_data in ingredients_data
+        ])
+
+    def create(self, validated_data):
+        """Создаёт рецепт с тегами и ингредиентами."""
+        tags_data = validated_data.pop('tags', [])
+        ingredients_data = validated_data.pop('recipe_ingredients', [])
+        
+        # Проверки вынесены в `validate_*` методы, поэтому здесь они не нужны
+        recipe = Recipe.objects.create(**validated_data)
+        recipe.tags.set(tags_data)
+        self._process_ingredients(recipe, ingredients_data)
         return recipe
 
     def update(self, instance, validated_data):
+        """Обновляет рецепт, теги и ингредиенты."""
         tags_data = validated_data.pop('tags', None)
         ingredients_data = validated_data.pop('recipe_ingredients', None)
+        
+        # Обновляем базовые поля
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        instance.save()
+        
+        # Обновляем теги (если переданы)
         if tags_data is not None:
             instance.tags.set(tags_data)
+        
+        # Обновляем ингредиенты (если переданы)
         if ingredients_data is not None:
-            instance.recipe_ingredients.all().delete()
-            for ingredient_data in ingredients_data:
-                RecipeIngredient.objects.create(
-                    recipe=instance,
-                    ingredient=ingredient_data['id'],
-                    amount=ingredient_data['amount']
-                )
-        instance.save()
+            self._process_ingredients(instance, ingredients_data)
+        
         return instance
 
     def validate_ingredients(
             self, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Проверяет, что передан хотя бы один ингредиент."""
+        """Проверяет, что:
+        - передан хотя бы один ингредиент,
+        - нет дубликатов ингредиентов.
+        """
         if not value:
             raise serializers.ValidationError(
-                'Добавьте хотя бы один ингредиент'
+                'Добавьте хотя бы один ингредиент.'
+            )
+        ingredient_ids = [ingredient['id'].id for ingredient in value]
+        if len(ingredient_ids) != len(set(ingredient_ids)):
+            raise serializers.ValidationError(
+                'Ингредиенты в рецепте не должны повторяться.'
             )
         return value
 
     def validate_tags(self, value: List[Tag]) -> List[Tag]:
-        """Проверяет, что передан хотя бы один тег."""
+        """Проверяет, что:
+        - передан хотя бы один тег
+        - нет дубликатов тегов
+        """
         if not value:
-            raise serializers.ValidationError('Добавьте хотя бы один тег')
+            raise serializers.ValidationError(
+                'Добавьте хотя бы один тег'
+            )
+        tag_ids = [tag.id for tag in value]
+        if len(tag_ids) != len(set(tag_ids)):
+            raise serializers.ValidationError(
+                'Теги не должны повторяться'
+            )
         return value
 
     def validate_cooking_time(self, value):

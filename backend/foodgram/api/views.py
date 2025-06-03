@@ -18,8 +18,8 @@ from food.models import (
     ShoppingCart,
     Tag,
     User,
+    generate_hash,
 )
-from hashids import Hashids
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -41,7 +41,6 @@ from api.serializers import (
     UserSerializer,
 )
 
-hashids = Hashids(salt="your-secret-salt", min_length=3)
 
 class UserViewSet(DjoserUserViewSet):
     http_method_names = ['get', 'post', 'put', 'delete']
@@ -190,13 +189,21 @@ class RecipeViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         return queryset.prefetch_related('tags', 'ingredients')
 
-    @action(detail=True, methods=['get'], url_path='get-link')
+    @action(detail=True,
+            methods=('get',),
+            url_path='get-link',
+            url_name='get-link'
+            )
     def get_link(self, request, pk=None):
-        """Создает короткую ссылку"""
+        """Генерирует короткую ссылку на рецепт."""
         recipe = self.get_object()
-        short_code = hashids.encode(recipe.id)
-        short_url = f'{settings.SITE_DOMAIN}/s/{short_code}'
-        return Response({'short-link': short_url})
+        if not recipe.short_link:
+            recipe.short_link = generate_hash()
+            recipe.save()
+        return Response({
+            'short-link': request.build_absolute_uri(
+                f'/s/{recipe.short_link}/')
+        })
 
     def paginate_queryset(self, queryset):
         """
@@ -234,7 +241,12 @@ class RecipeViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticatedOrReadOnly]
         return [permission() for permission in permission_classes]
 
+    def perform_create(self, serializer):
+        """Автоматически устанавливает автора рецепта."""
+        serializer.save(author=self.request.user)
+
     def perform_update(self, serializer):
+        """Проверяет, что пользователь может редактировать рецепт."""
         if serializer.instance.author != self.request.user:
             raise PermissionDenied(
                 'Вы можете редактировать только свои рецепты'

@@ -1,7 +1,21 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
+from hashids import Hashids
+
+
+def generate_hash(recipe_id=None):
+    hashids = Hashids(
+        min_length=4,
+        salt=settings.SECRET_KEY,
+        alphabet='abcdefghijklmnopqrstuvwxyz1234567890'
+    )
+    if recipe_id is None:
+        last_id = Recipe.objects.order_by('-id').first()
+        recipe_id = (last_id.id + 1) if last_id else 1
+    return hashids.encode(recipe_id)
 
 
 class UserManager(BaseUserManager):
@@ -173,6 +187,13 @@ class Recipe(models.Model):
         verbose_name='Дата создания'
     )
 
+    short_link = models.SlugField(
+        max_length=32,
+        unique=True,
+        blank=True,
+        verbose_name='Короткая ссылка'
+    )
+
     class Meta:
         """Мета-класс для модели Recipe.
 
@@ -195,6 +216,12 @@ class Recipe(models.Model):
             raise ValidationError(
                 'Рецепт должен содержать хотя бы один тег'
             )
+
+    def save(self, *args, **kwargs):
+        """Сохраняет рецепт, генерируя короткую ссылку при необходимости."""
+        if not self.short_link:
+            self.short_link = generate_hash()
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         """Возвращает строковое представление названия рецепта."""
