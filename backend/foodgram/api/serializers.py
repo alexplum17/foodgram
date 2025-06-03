@@ -28,14 +28,21 @@ class Base64ImageField(serializers.ImageField):
             data = ContentFile(base64.b64decode(imgstr), name='temp.' + ext)
         return super().to_internal_value(data)
 
-    def to_representation(self, value: Any) -> Optional[str]:
-        """Возвращает полный URL изображения."""
+    def to_representation(self, value):
         if not value:
             return None
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(value.url)
-        return value.url
+        if isinstance(value, str):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(value)
+            return value
+        try:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(value.url)
+            return value.url
+        except AttributeError:
+            return str(value)
 
 
 class AvatarUpdateSerializer(serializers.Serializer):
