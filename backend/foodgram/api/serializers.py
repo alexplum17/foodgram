@@ -443,10 +443,9 @@ class RecipeSerializer(serializers.ModelSerializer):
 class FavoriteSerializer(serializers.ModelSerializer):
     """Сериализатор для избранных рецептов."""
 
-    id = serializers.ReadOnlyField(source='recipe.id')
-    name = serializers.ReadOnlyField(source='recipe.name')
-    image = Base64ImageField(source='recipe')
-    cooking_time = serializers.ReadOnlyField(source='recipe.cooking_time')
+    name = serializers.ReadOnlyField(source='favorite.name')
+    image = Base64ImageField(source='favorite.image')
+    cooking_time = serializers.ReadOnlyField(source='favorite.cooking_time')
 
     class Meta:
         """Мета-класс для настройки сериализатора избранных рецептов.
@@ -485,7 +484,7 @@ class ShoppingCartSerializer(serializers.ModelSerializer):
 class FollowSerializer(serializers.ModelSerializer):
     """Сериализатор для подписок."""
 
-    is_subscribed = IsFollowedField(default=True)
+    is_subscribed = IsFollowedField(source='following')
     email = serializers.ReadOnlyField(source='following.email')
     id = serializers.ReadOnlyField(source='following.id')
     username = serializers.ReadOnlyField(source='following.username')
@@ -501,9 +500,9 @@ class FollowSerializer(serializers.ModelSerializer):
     def get_recipes(self, obj: Follow) -> List[Dict[str, Any]]:
         """Получает список рецептов с возможностью ограничения количества."""
         request = self.context.get('request')
-        recipes = obj.following.recipes.order_by('-created_at')
+        recipes = obj.following.recipes.all()
         if request:
-            recipes_limit = request.query_params.get('recipes_limit', 3)
+            recipes_limit = request.query_params.get('recipes_limit')
             if recipes_limit and str(recipes_limit).isdigit():
                 recipes = recipes[:int(recipes_limit)]
         return RecipeFollowFieldSerializer(

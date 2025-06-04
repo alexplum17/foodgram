@@ -268,7 +268,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         if request.method == 'POST':
             if Favorite.objects.filter(
                 user=request.user,
-                recipe=recipe
+                favorite=recipe
             ).exists():
                 return Response(
                     {'errors': 'Рецепт уже в избранном'},
@@ -276,13 +276,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 )
             favorite = Favorite.objects.create(
                 user=request.user,
-                recipe=recipe
+                favorite=recipe
             )
             serializer = FavoriteSerializer(favorite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         elif request.method == 'DELETE':
             favorite = Favorite.objects.filter(
-                user=request.user, recipe=recipe
+                user=request.user, favorite=recipe
             ).first()
             if not favorite:
                 return Response(
@@ -333,7 +333,13 @@ class FollowViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Follow.objects.filter(user=self.request.user)
+        return Follow.objects.filter(user=self.request.user
+                                     ).select_related('following')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def list(self, request, *args, **kwargs):
         """Переопределяет list при отсутствии подписок."""
@@ -547,7 +553,7 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     queryset = Favorite.objects.all()
     serializer_class = FavoriteSerializer
     pagination_class = PageNumberPagination
-    http_method_names = ['post', 'del']
+    http_method_names = ['post', 'delete']
     search_fields = ['=name']
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -582,7 +588,7 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['delete'])
-    def delete(self, request, pk=None):
+    def destroy(self, request, pk=None):
         """Удаление рецепта из избранного."""
         try:
             favorite = Favorite.objects.get(
