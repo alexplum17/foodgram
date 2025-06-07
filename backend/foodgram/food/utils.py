@@ -16,9 +16,8 @@ def custom_exception_handler(exc, context):
         response.data = {
             "detail": 'Объект не найден'
         }
-        logger.debug(
-            f"404 Not Found - {context['request'].method} {context[
-                'request'].path}"
+        logger.debug(f"404 Not Found - {context['request'].method}"
+                     "{context['request'].path}"
         )
 
     return response

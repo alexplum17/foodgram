@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.9
 
 WORKDIR /app
 
@@ -10,4 +10,6 @@ RUN pip install -r requirements.txt --no-cache-dir
 
 COPY . .
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "foodgram.wsgi"] 
+WORKDIR /app/foodgram
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "foodgram.wsgi:application"] 
