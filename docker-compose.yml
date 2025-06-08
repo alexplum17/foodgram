@@ -1,0 +1,39 @@
+version: '3.3'
+
+volumes:
+  pg_data:
+  static:
+  media:
+
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_USER: django_user
+      POSTGRES_DB: django
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build: ./backend/
+    env_file: .env
+    volumes:
+      - ./backend:/app
+      - static:/backend_static/
+      - media:/app/media/
+  frontend:
+    env_file: .env
+    build: ./frontend/
+    command: npm start 
+    volumes:
+      - static:/frontend_static/
+  gateway:
+    build: ./infra/
+    env_file: .env
+    volumes:
+      - static:/staticfiles/
+      - media:/app/media/
+    ports:
+      - 8000:80
