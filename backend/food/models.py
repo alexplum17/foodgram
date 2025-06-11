@@ -6,15 +6,12 @@ from django.db import models
 from hashids import Hashids
 
 
-def generate_hash(recipe_id=None):
+def generate_hash(recipe_id):
     hashids = Hashids(
         min_length=4,
         salt=settings.SECRET_KEY,
         alphabet='abcdefghijklmnopqrstuvwxyz1234567890'
     )
-    if recipe_id is None:
-        last_id = Recipe.objects.order_by('-id').first()
-        recipe_id = (last_id.id + 1) if last_id else 1
     return hashids.encode(recipe_id)
 
 
@@ -208,20 +205,23 @@ class Recipe(models.Model):
 
     def clean(self) -> None:
         """Выполняет валидацию ингридиентов и тегов перед сохранением."""
-        if not self.ingredients.exists():
-            raise ValidationError(
-                'Рецепт должен содержать хотя бы один ингредиент'
-            )
-        if not self.tags.exists():
-            raise ValidationError(
-                'Рецепт должен содержать хотя бы один тег'
-            )
+        if self.pk:
+            if not self.ingredients.exists():
+                raise ValidationError(
+                    'Рецепт должен содержать хотя бы один ингредиент'
+                )
+            if not self.tags.exists():
+                raise ValidationError(
+                    'Рецепт должен содержать хотя бы один тег'
+                )
 
     def save(self, *args, **kwargs):
         """Сохраняет рецепт, генерируя короткую ссылку при необходимости."""
-        if not self.short_link:
-            self.short_link = generate_hash()
         super().save(*args, **kwargs)
+        if not self.short_link:
+            self.short_link = generate_hash(self.id)
+            Recipe.objects.filter(id=self.id).update(
+                short_link=self.short_link)
 
     def __str__(self) -> str:
         """Возвращает строковое представление названия рецепта."""
@@ -394,7 +394,8 @@ class ShoppingCart(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name='Пользователь'
+        verbose_name='Пользователь',
+        related_name='shopping_cart'
     )
     recipe = models.ForeignKey(
         Recipe,

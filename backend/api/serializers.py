@@ -59,6 +59,8 @@ class IsFavoritedField(serializers.Field):
 
     def to_representation(self, obj: Recipe) -> bool:
         """Проверяет, добавлен ли рецепт в избранное."""
+        if hasattr(obj, 'is_favorited'):
+            return obj.is_favorited
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return Favorite.objects.filter(
@@ -73,6 +75,8 @@ class IsInShoppingCartField(serializers.Field):
 
     def to_representation(self, obj: Recipe) -> bool:
         """Проверяет, добавлен ли рецепт в корзину у текущего пользователя."""
+        if hasattr(obj, 'is_in_shopping_cart'):
+            return obj.is_in_shopping_cart
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return ShoppingCart.objects.filter(
@@ -363,8 +367,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         """Создаёт рецепт с тегами и ингредиентами."""
         tags_data = validated_data.pop('tags', [])
         ingredients_data = validated_data.pop('recipe_ingredients', [])
-        
-        # Проверки вынесены в `validate_*` методы, поэтому здесь они не нужны
         recipe = Recipe.objects.create(**validated_data)
         recipe.tags.set(tags_data)
         self._process_ingredients(recipe, ingredients_data)

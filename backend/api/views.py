@@ -5,6 +5,7 @@ from io import BytesIO, StringIO
 import reportlab
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.db.models import Exists, OuterRef
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -187,7 +188,29 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.prefetch_related('tags', 'ingredients')
+        queryset = queryset.prefetch_related('tags', 'ingredients')
+        if self.request.user.is_authenticated:
+            queryset = queryset.annotate(
+                is_favorited=Exists(
+                    Favorite.objects.filter(
+                        user=self.request.user,
+                        favorite=OuterRef('pk')
+                    )
+                ),
+                is_in_shopping_cart=Exists(
+                    ShoppingCart.objects.filter(
+                        user=self.request.user,
+                        recipe=OuterRef('pk')
+                    )
+                )
+            )
+        else:
+            from django.db.models import Value
+            queryset = queryset.annotate(
+                is_favorited=Value(False),
+                is_in_shopping_cart=Value(False)
+            )
+        return queryset
 
     @action(detail=True,
             methods=('get',),
@@ -374,17 +397,19 @@ class FollowViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         following_id = kwargs.get('id')
+        if not following_id:
+            return Response(
+                {'errors': 'ID пользователя не указан'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         following = get_object_or_404(User, id=following_id)
-
         if request.user == following:
             return Response(
                 {'errors': 'Нельзя подписаться на самого себя'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        if Follow.objects.filter(
-            user=request.user, following=following
-        ).exists():
+        if Follow.objects.filter(user=request.user, following=following
+                                 ).exists():
             return Response(
                 {'errors': 'Вы уже подписаны на этого пользователя'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -546,56 +571,3 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         for (name, unit), amount in sorted(ingredients.items()):
             writer.writerow([name, unit, amount])
         return response
-
-
-class FavoriteViewSet(viewsets.ModelViewSet):
-
-    queryset = Favorite.objects.all()
-    serializer_class = FavoriteSerializer
-    pagination_class = PageNumberPagination
-    http_method_names = ['post', 'delete']
-    search_fields = ['=name']
-    permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = RecipeFilter
-
-    def get_queryset(self):
-        """Возвращает только избранное текущего пользователя."""
-        return self.queryset.filter(user=self.request.user).select_related(
-            'favorite', 'favorite__author'
-        ).prefetch_related('favorite__tags')
-
-    def create(self, request, *args, **kwargs):
-        """Добавление рецепта в избранное."""
-        recipe_id = request.data.get('id')
-        if not recipe_id:
-            return Response(
-                {'error': 'Не указан ID рецепта'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            recipe = Recipe.objects.get(id=recipe_id)
-        except Recipe.DoesNotExist:
-            raise NotFound({'error': 'Рецепт не найден'})
-
-        if Favorite.objects.filter(user=request.user, favorite=recipe
-                                   ).exists():
-            raise ValidationError({'error': 'Рецепт уже в избранном'})
-
-        favorite = Favorite.objects.create(user=request.user, favorite=recipe)
-        serializer = self.get_serializer(favorite)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=['delete'])
-    def destroy(self, request, pk=None):
-        """Удаление рецепта из избранного."""
-        try:
-            favorite = Favorite.objects.get(
-                user=request.user,
-                favorite_id=pk
-            )
-            favorite.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except Favorite.DoesNotExist:
-            raise NotFound({'error': 'Рецепт не найден в избранном'})
