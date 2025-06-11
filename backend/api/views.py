@@ -1,8 +1,9 @@
+"""backend/api/views.py."""
+
 import csv
 from collections import defaultdict
-from io import BytesIO, StringIO
+from io import BytesIO
 
-import reportlab
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db.models import Exists, OuterRef
@@ -10,6 +11,21 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
+from food.constants import (
+    MAX_PAGE_SIZE,
+    PDF_FONT_BOLD,
+    PDF_FONT_REGULAR,
+    PDF_LINE_HEIGHT,
+    PDF_MIN_Y,
+    PDF_REGULAR_FONT_SIZE,
+    PDF_START_X,
+    PDF_START_Y,
+    PDF_TITLE_FONT_SIZE,
+    PDF_TITLE_Y,
+    SHOPPING_LIST_CSV_FILENAME,
+    SHOPPING_LIST_PDF_FILENAME,
+    SHOPPING_LIST_TXT_FILENAME,
+)
 from food.models import (
     Favorite,
     Follow,
@@ -24,7 +40,6 @@ from food.models import (
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -43,19 +58,11 @@ from api.serializers import (
 )
 
 
-class UserViewSet(DjoserUserViewSet):
-    http_method_names = ['get', 'post', 'put', 'delete']
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_serializer_class(self):
-        if self.action in ['create', 'set_password']:
-            return super().get_serializer_class()
-        return UserSerializer
+class BaseViewSet(viewsets.ViewSet):
+    """Базовый ViewSet с общими методами для всех наследников."""
 
     def paginate_queryset(self, queryset):
-        """
-        Переопределяем пагинацию для поддержки параметра 'limit'
-        """
+        """Переопределяет пагинацию для поддержки параметра 'limit'."""
         if self.paginator is None:
             return None
         limit = self.request.query_params.get('limit')
@@ -63,7 +70,8 @@ class UserViewSet(DjoserUserViewSet):
             try:
                 limit = int(limit)
                 if limit > 0:
-                    max_limit = getattr(settings, 'MAX_PAGE_SIZE', 100)
+                    max_limit = getattr(
+                        settings, 'MAX_PAGE_SIZE', MAX_PAGE_SIZE)
                     limit = min(limit, max_limit)
                     self.paginator.page_size = limit
             except (ValueError, TypeError):
@@ -73,7 +81,21 @@ class UserViewSet(DjoserUserViewSet):
         return self.paginator.paginate_queryset(
             queryset, self.request, view=self)
 
+
+class UserViewSet(DjoserUserViewSet, BaseViewSet):
+    """ViewSet для управления пользователями."""
+
+    http_method_names = ['get', 'post', 'put', 'delete']
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_serializer_class(self):
+        """Определяет класс сериализатора в зависимости от действия."""
+        if self.action in ['create', 'set_password']:
+            return super().get_serializer_class()
+        return UserSerializer
+
     def create(self, request, *args, **kwargs):
+        """Создает нового пользователя с валидацией обязательных полей."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         if not serializer.validated_data.get('email'):
@@ -108,7 +130,7 @@ class UserViewSet(DjoserUserViewSet):
 
     @action(['post'], detail=False, permission_classes=[IsAuthenticated])
     def set_password(self, request, *args, **kwargs):
-        # Смена пароля только для авторизованных
+        """Изменяет пароль текущего пользователя."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.request.user.set_password(serializer.data['new_password'])
@@ -118,7 +140,7 @@ class UserViewSet(DjoserUserViewSet):
     @action(detail=False, methods=['put', 'delete'], url_path='me/avatar',
             permission_classes=[IsAuthenticated])
     def avatar(self, request):
-        # Изменение аватара только для авторизованных
+        """Управление аватаром пользователя."""
         user = request.user
         profile, created = Profile.objects.get_or_create(user=user)
         if request.method == 'PUT':
@@ -146,6 +168,7 @@ class UserViewSet(DjoserUserViewSet):
             permission_classes=[IsAuthenticated]
             )
     def me(self, request):
+        """Возвращает данные текущего пользователя."""
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 
@@ -169,6 +192,7 @@ class IngredientViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
+        """Фильтрует ингредиенты по имени, если указан параметр name."""
         queryset = self.queryset
         search_query = self.request.query_params.get('name', None)
         if search_query:
@@ -177,6 +201,8 @@ class IngredientViewSet(viewsets.ModelViewSet):
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
+    """ViewSet для управления рецептами."""
+
     queryset = Recipe.objects.all().order_by('-created_at')
     serializer_class = RecipeSerializer
     pagination_class = PageNumberPagination
@@ -185,8 +211,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = RecipeFilter
 
-
     def get_queryset(self):
+        """Оптимизирует запросы и добавляет аннотации для авторизованных пользователей."""
         queryset = super().get_queryset()
         queryset = queryset.prefetch_related('tags', 'ingredients')
         if self.request.user.is_authenticated:
@@ -229,9 +255,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         })
 
     def paginate_queryset(self, queryset):
-        """
-        Переопределяем пагинацию для поддержки параметра 'limit'
-        """
+        """Переопределяем пагинацию для поддержки параметра 'limit'."""
         if self.paginator is None:
             return None
         limit = self.request.query_params.get('limit')
@@ -250,6 +274,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             queryset, self.request, view=self)
 
     def get_serializer_context(self):
+        """Добавляет запрос в контекст сериализатора."""
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
@@ -279,6 +304,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['delete'],
             permission_classes=[IsAuthorOrReadOnly])
     def perform_destroy(self, instance):
+        """Удаляет рецепт с проверкой прав."""
         if instance.author != self.request.user:
             raise PermissionDenied('Вы можете удалять только свои рецепты')
         instance.delete()
@@ -286,7 +312,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
-        """Добавление/удаление рецепта из избранного, для авторизованных"""
+        """Добавление/удаление рецепта из избранного, для авторизованных."""
         recipe = self.get_object()
         if request.method == 'POST':
             if Favorite.objects.filter(
@@ -318,7 +344,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def shopping_cart(self, request, pk=None):
-        """Добавление/удаление рецепта из списка покупок, для авторизованных"""
+        """Добавление/удаление рецепта из списка покупок."""
         recipe = self.get_object()
         if request.method == 'POST':
             if ShoppingCart.objects.filter(user=request.user,
@@ -346,7 +372,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class FollowViewSet(viewsets.ModelViewSet):
+class FollowViewSet(viewsets.ModelViewSet, BaseViewSet):
     """Управление подписками. Доступно только авторизованным пользователям."""
 
     queryset = Follow.objects.all()
@@ -356,10 +382,12 @@ class FollowViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        """Возвращает подписки текущего пользователя."""
         return Follow.objects.filter(user=self.request.user
                                      ).select_related('following')
 
     def get_serializer_context(self):
+        """Добавляет запрос в контекст сериализатора."""
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
@@ -374,28 +402,8 @@ class FollowViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    def paginate_queryset(self, queryset):
-        """
-        Переопределяем пагинацию для поддержки параметра 'limit'
-        """
-        if self.paginator is None:
-            return None
-        limit = self.request.query_params.get('limit')
-        if limit is not None:
-            try:
-                limit = int(limit)
-                if limit > 0:
-                    max_limit = getattr(settings, 'MAX_PAGE_SIZE', 100)
-                    limit = min(limit, max_limit)
-                    self.paginator.page_size = limit
-            except (ValueError, TypeError):
-                # Если limit не является числом,
-                # используем значение по умолчанию
-                pass
-        return self.paginator.paginate_queryset(
-            queryset, self.request, view=self)
-
     def create(self, request, *args, **kwargs):
+        """Создает подписку на пользователя."""
         following_id = kwargs.get('id')
         if not following_id:
             return Response(
@@ -419,6 +427,7 @@ class FollowViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
+        """Удаляет подписку на пользователя."""
         following_id = kwargs.get('id')
         following = get_object_or_404(User, id=following_id)
         follow = Follow.objects.filter(
@@ -437,18 +446,22 @@ class FollowViewSet(viewsets.ModelViewSet):
 class ShoppingCartViewSet(viewsets.ModelViewSet):
     """
     Управление списком покупок.
+
     Доступно только авторизованным пользователям.
     Поддерживает скачивание списка ингредиентов в форматах TXT, PDF и CSV.
     """
+
     permission_classes = [IsAuthenticated]
     queryset = ShoppingCart.objects.all()
     serializer_class = ShoppingCartSerializer
     http_method_names = ['get', 'post', 'delete']
 
     def create(self, request, *args, **kwargs):
+        """Добавляет рецепт в список покупок."""
         recipe_id = kwargs.get('id')
         recipe = get_object_or_404(Recipe, id=recipe_id)
-        if ShoppingCart.objects.filter(user=request.user, recipe=recipe).exists():
+        if ShoppingCart.objects.filter(user=request.user, recipe=recipe
+                                       ).exists():
             return Response(
                 {'errors': 'Рецепт уже в списке покупок'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -461,6 +474,7 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
+        """Удаляет рецепт из списка покупок."""
         recipe_id = kwargs.get('id')
         recipe = get_object_or_404(Recipe, id=recipe_id)
 
@@ -480,16 +494,17 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
     def download(self, request):
         """
         Скачивание списка ингредиентов для рецептов в корзине.
+
         Поддерживаемые форматы: TXT, PDF, CSV (передается в параметре format)
-        Можно указать конкретные рецепты через параметр recipe_ids (через запятую)
         """
         user = request.user
         recipe_ids = request.query_params.get('recipe_ids')
-        # Получаем рецепты из корзины пользователя
         if recipe_ids:
             try:
                 recipe_ids = [int(id) for id in recipe_ids.split(',')]
-                shopping_cart = user.shopping_cart.filter(recipe_id__in=recipe_ids)
+                shopping_cart = user.shopping_cart.filter(
+                    recipe_id__in=recipe_ids
+                )
             except ValueError:
                 return Response(
                     {'error': 'Некорректный формат recipe_ids'},
@@ -497,8 +512,6 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
                 )
         else:
             shopping_cart = user.shopping_cart.all()
-
-        # Собираем ингредиенты с учетом количества
         ingredients = defaultdict(int)
         for item in shopping_cart:
             for ri in item.recipe.recipe_ingredients.all():
@@ -525,10 +538,10 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
             )
 
     def _generate_txt_response(self, ingredients):
-        """Генерация TXT файла со списком ингредиентов"""
+        """Генерация TXT файла со списком ингредиентов."""
         response = HttpResponse(content_type='text/plain; charset=utf-8')
-        response['Content-Disposition'
-                 ] = 'attachment; filename="shopping_list.txt"'
+        response['Content-Disposition'] = f'attachment; filename="{
+            SHOPPING_LIST_TXT_FILENAME}"'
 
         text = 'Список покупок:\n\n'
         for (name, unit), amount in sorted(ingredients.items()):
@@ -537,35 +550,39 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         return response
 
     def _generate_pdf_response(self, ingredients):
-        """Генерация PDF файла со списком ингредиентов"""
+        """Генерация PDF файла со списком ингредиентов."""
         buffer = BytesIO()
         p = canvas.Canvas(buffer)
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, 800, "Список покупок:")
-        p.setFont("Helvetica", 12)
-        y_position = 770
+        p.setFont(PDF_FONT_BOLD, PDF_TITLE_FONT_SIZE)
+        p.drawString(PDF_START_X, PDF_START_Y, 'Список покупок:')
+        p.setFont(PDF_FONT_REGULAR, PDF_REGULAR_FONT_SIZE)
+        y_position = PDF_TITLE_Y
         for (name, unit), amount in sorted(ingredients.items()):
-            if y_position < 50:
+            if y_position < PDF_MIN_Y:
                 p.showPage()
-                y_position = 800
-                p.setFont("Helvetica", 12)
-            p.drawString(50, y_position, f"- {name} ({unit}) — {amount}")
-            y_position -= 20
+                y_position = PDF_START_Y
+                p.setFont(PDF_FONT_REGULAR, PDF_REGULAR_FONT_SIZE)
+            p.drawString(
+                PDF_START_X,
+                y_position,
+                f'- {name} ({unit}) — {amount}'
+            )
+            y_position -= PDF_LINE_HEIGHT
         p.showPage()
         p.save()
         pdf = buffer.getvalue()
         buffer.close()
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'
-                 ] = 'attachment; filename="shopping_list.pdf"'
+        response['Content-Disposition'] = f'attachment; filename="{
+            SHOPPING_LIST_PDF_FILENAME}"'
         response.write(pdf)
         return response
 
     def _generate_csv_response(self, ingredients):
-        """Генерация CSV файла со списком ингредиентов"""
+        """Генерация CSV файла со списком ингредиентов."""
         response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'
-                 ] = 'attachment; filename="shopping_list.csv"'
+        response['Content-Disposition'] = f'attachment; filename="{
+            SHOPPING_LIST_CSV_FILENAME}"'
         writer = csv.writer(response)
         writer.writerow(['Ингредиент', 'Единица измерения', 'Количество'])
         for (name, unit), amount in sorted(ingredients.items()):

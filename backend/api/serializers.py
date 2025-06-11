@@ -1,9 +1,24 @@
 import base64
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
+from food.constants import (
+    DEFAULT_PAGE_SIZE,
+    MAX_EMAIL_LENGTH,
+    MAX_FIRST_NAME_LENGTH,
+    MAX_INGREDIENT_NAME_LENGTH,
+    MAX_LAST_NAME_LENGTH,
+    MAX_MEASUREMENT_UNIT_LENGTH,
+    MAX_PAGE_SIZE,
+    MAX_RECIPE_NAME_LENGTH,
+    MAX_TAG_NAME_LENGTH,
+    MAX_TAG_SLUG_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+)
 from food.models import (
     Favorite,
     Follow,
@@ -29,6 +44,7 @@ class Base64ImageField(serializers.ImageField):
         return super().to_internal_value(data)
 
     def to_representation(self, value):
+        """Преобразует файл в URL для API."""
         if not value:
             return None
         if isinstance(value, str):
@@ -46,9 +62,12 @@ class Base64ImageField(serializers.ImageField):
 
 
 class AvatarUpdateSerializer(serializers.Serializer):
+    """Сериализатор для обновления аватара пользователя."""
+
     avatar = Base64ImageField()
 
     def update(self, instance, validated_data):
+        """Обновляет аватар пользователя."""
         instance.profile.avatar = validated_data['avatar']
         instance.profile.save()
         return instance
@@ -148,26 +167,30 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
+    """Сериализатор для создания пользователя."""
+
     first_name = serializers.CharField(
         required=True,
         allow_blank=False,
-        max_length=150
+        max_length=MAX_FIRST_NAME_LENGTH
     )
     last_name = serializers.CharField(
         required=True,
         allow_blank=False,
-        max_length=150
+        max_length=MAX_LAST_NAME_LENGTH
     )
     email = serializers.EmailField(
         required=True,
-        max_length=254
+        max_length=MAX_EMAIL_LENGTH
     )
     username = serializers.CharField(
-        max_length=150,
+        max_length=MAX_USERNAME_LENGTH,
         validators=[AbstractUser.username_validator]
     )
 
     class Meta(BaseUserCreateSerializer.Meta):
+        """Мета-класс для настройки сериализатора создания пользователя."""
+
         model = User
         fields = (
             'email',
@@ -182,6 +205,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
         }
 
     def validate(self, data):
+        """Проверяет валидность данных пользователя."""
         required_fields = ['email', 'first_name', 'last_name']
         for field in required_fields:
             if not data.get(field):
@@ -203,6 +227,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
         return data
 
     def validate_username(self, value):
+        """Проверяет валидность имени пользователя."""
         if not value.strip():
             raise serializers.ValidationError(
                 'Имя пользователя не может быть пустым.',
@@ -216,7 +241,8 @@ class UserCreateSerializer(BaseUserCreateSerializer):
         return value.strip()
 
     def validate_email(self, value):
-        if len(value) > 254:
+        """Проверяет валидность email."""
+        if len(value) > MAX_EMAIL_LENGTH:
             raise serializers.ValidationError(
                 'Email не может превышать 254 символа.',
                 code=status.HTTP_400_BAD_REQUEST
@@ -224,6 +250,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
         return value
 
     def validate_password(self, value):
+        """Проверяет валидность пароля."""
         if not value.strip():
             raise serializers.ValidationError(
                 'Пароль не может быть пустым.',
@@ -259,6 +286,7 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
     def to_representation(self, instance):
+        """Переопределяет представление для отображения подписки."""
         representation = super().to_representation(instance)
         representation['is_subscribed'
                        ] = IsFollowedField().to_representation(instance)
@@ -339,7 +367,7 @@ class RecipeSerializer(serializers.ModelSerializer):
         )
 
     def to_representation(self, instance):
-        """Переопределяем представление для правильного отображения тегов"""
+        """Переопределяем представление для правильного отображения тегов."""
         representation = super().to_representation(instance)
         representation['tags'] = TagSerializer(
             instance.tags.all(),
@@ -353,7 +381,7 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def _process_ingredients(self, recipe, ingredients_data):
         """Обрабатывает ингредиенты (создание/обновление)."""
-        recipe.recipe_ingredients.all().delete()  # Удаляем старые ингредиенты
+        recipe.recipe_ingredients.all().delete()
         RecipeIngredient.objects.bulk_create([
             RecipeIngredient(
                 recipe=recipe,
@@ -384,6 +412,7 @@ class RecipeSerializer(serializers.ModelSerializer):
         return instance
 
     def validate(self, data):
+        """Проверяет данные рецепта перед сохранением."""
         if self.context['request'].method == 'PATCH':
             if 'tags' not in data and 'recipe_ingredients' not in data:
                 raise serializers.ValidationError(
@@ -403,10 +432,7 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def validate_ingredients(
             self, value: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Проверяет, что:
-        - передан хотя бы один ингредиент,
-        - нет дубликатов ингредиентов.
-        """
+        """Валидация поля ингредиентов."""
         if not value:
             raise serializers.ValidationError(
                 'Добавьте хотя бы один ингредиент.'
@@ -419,10 +445,7 @@ class RecipeSerializer(serializers.ModelSerializer):
         return value
 
     def validate_tags(self, value: List[Tag]) -> List[Tag]:
-        """Проверяет, что:
-        - передан хотя бы один тег
-        - нет дубликатов тегов
-        """
+        """Проверяет поле тегов."""
         if not value:
             raise serializers.ValidationError(
                 'Добавьте хотя бы один тег'
@@ -435,7 +458,8 @@ class RecipeSerializer(serializers.ModelSerializer):
         return value
 
     def validate_cooking_time(self, value):
-        if value < 1:
+        """Валидация времени приготовления."""
+        if value < MIN_COOKING_TIME:
             raise serializers.ValidationError(
                 'Время приготовления должно быть не менее 1 минуты'
             )
@@ -536,6 +560,7 @@ class FollowSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, data):
+        """Проверка, что пользователь не пытается подписаться на самого себя."""
         if self.context['request'].user == data['following']:
             raise serializers.ValidationError(
                 'Нельзя подписаться на самого себя'

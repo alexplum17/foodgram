@@ -1,0 +1,41 @@
+"""backend/food/constants.py."""
+
+# Максимальные длины полей
+MAX_USERNAME_LENGTH = 150
+MAX_EMAIL_LENGTH = 254
+MAX_FIRST_NAME_LENGTH = 150
+MAX_LAST_NAME_LENGTH = 150
+MAX_TAG_NAME_LENGTH = 32
+MAX_TAG_SLUG_LENGTH = 32
+MAX_INGREDIENT_NAME_LENGTH = 100
+MAX_MEASUREMENT_UNIT_LENGTH = 20
+MAX_RECIPE_NAME_LENGTH = 256
+MAX_SHORT_LINK_LENGTH = 32
+
+# Минимальные значения
+MIN_COOKING_TIME = 1
+MIN_INGREDIENT_AMOUNT = 1
+
+# Настройки пагинации
+DEFAULT_PAGE_SIZE = 6
+MAX_PAGE_SIZE = 100
+
+# Настройки для коротких ссылок
+SHORT_LINK_MIN_LENGTH = 4
+SHORT_LINK_ALPHABET = 'abcdefghijklmnopqrstuvwxyz1234567890'
+
+# Названия файлов для скачивания
+SHOPPING_LIST_TXT_FILENAME = 'shopping_list.txt'
+SHOPPING_LIST_PDF_FILENAME = 'shopping_list.pdf'
+SHOPPING_LIST_CSV_FILENAME = 'shopping_list.csv'
+
+# Настройки PDF
+PDF_FONT_BOLD = "Helvetica-Bold"
+PDF_FONT_REGULAR = "Helvetica"
+PDF_TITLE_FONT_SIZE = 14
+PDF_REGULAR_FONT_SIZE = 12
+PDF_START_X = 50
+PDF_START_Y = 800
+PDF_TITLE_Y = 770
+PDF_LINE_HEIGHT = 20
+PDF_MIN_Y = 50

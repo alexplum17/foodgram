@@ -1,3 +1,5 @@
+"""backend/food/models.py."""
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
@@ -5,18 +7,39 @@ from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from hashids import Hashids
 
+from food.constants import (
+    MAX_EMAIL_LENGTH,
+    MAX_FIRST_NAME_LENGTH,
+    MAX_INGREDIENT_NAME_LENGTH,
+    MAX_LAST_NAME_LENGTH,
+    MAX_MEASUREMENT_UNIT_LENGTH,
+    MAX_RECIPE_NAME_LENGTH,
+    MAX_SHORT_LINK_LENGTH,
+    MAX_TAG_NAME_LENGTH,
+    MAX_TAG_SLUG_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+    SHORT_LINK_ALPHABET,
+    SHORT_LINK_MIN_LENGTH,
+)
+
 
 def generate_hash(recipe_id):
+    """Генерирует хеш для короткой ссылки на рецепт."""
     hashids = Hashids(
-        min_length=4,
+        min_length=SHORT_LINK_MIN_LENGTH,
         salt=settings.SECRET_KEY,
-        alphabet='abcdefghijklmnopqrstuvwxyz1234567890'
+        alphabet=SHORT_LINK_ALPHABET
     )
     return hashids.encode(recipe_id)
 
 
 class UserManager(BaseUserManager):
+    """Менеджер для кастомной модели пользователя."""
+
     def create_user(self, username, email, password, **extra_fields):
+        """Создает обычного пользователя."""
         email = self.normalize_email(email)
         user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
@@ -24,13 +47,17 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, email, password=None, **extra_fields):
+        """Создает суперпользователя."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(username, email, password, **extra_fields)
 
+
 class User(AbstractUser):
+    """Кастомная модель пользователя."""
+
     username = models.CharField(
-        max_length=150,
+        max_length=MAX_USERNAME_LENGTH,
         blank=False,
         unique=True,
         help_text='Обязательное поле. Максимум 150 символов.',
@@ -40,30 +67,37 @@ class User(AbstractUser):
         },
     )
     email = models.EmailField(
-        max_length=254,
+        max_length=MAX_EMAIL_LENGTH,
         blank=False,
         unique=True,
         verbose_name='Электронная почта'
     )
     first_name = models.CharField(
-        max_length=150,
+        max_length=MAX_FIRST_NAME_LENGTH,
         blank=False,
         verbose_name='Имя'
     )
     last_name = models.CharField(
-        max_length=150,
+        max_length=MAX_LAST_NAME_LENGTH,
         blank=False,
         verbose_name='Фамилия'
     )
     objects = UserManager()
 
     class Meta:
+        """Мета-класс для модели User.
+
+        Определяет:
+        - Названия в админке
+        """
+
         app_label = 'food'
         swappable = 'AUTH_USER_MODEL'
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
 
     def __str__(self):
+        """Возвращает строковое представление пользователя."""
         return f"{self.username} ({self.first_name} {self.last_name})"
 
 
@@ -71,7 +105,7 @@ class Tag(models.Model):
     """Модель тега, используемого для категоризации рецептов."""
 
     name = models.CharField(
-        max_length=32,
+        max_length=MAX_TAG_NAME_LENGTH,
         unique=True,
         verbose_name='Название тега',
         help_text='Введите название тега.',
@@ -80,7 +114,7 @@ class Tag(models.Model):
         unique=True,
         verbose_name='Уникальный идентификатор',
         help_text='Введите уникальный идентификатор тега',
-        max_length=32,
+        max_length=MAX_TAG_SLUG_LENGTH,
         validators=[RegexValidator(
             regex='^[-a-zA-Z0-9_]+$',
             message='Разрешены только цифры и буквы'
@@ -108,12 +142,12 @@ class Ingredient(models.Model):
     """Модель, представляющая ингредиенты для рецептов."""
 
     name = models.CharField(
-        max_length=100,
+        max_length=MAX_INGREDIENT_NAME_LENGTH,
         verbose_name='Название ингридиента',
         help_text='Введите название ингридиента.',
     )
     measurement_unit = models.CharField(
-        max_length=20,
+        max_length=MAX_MEASUREMENT_UNIT_LENGTH,
         verbose_name='Единица измерения',
         help_text='Введите единицу измерения (штуки, граммы и т.д.).',
     )
@@ -150,7 +184,7 @@ class Recipe(models.Model):
         verbose_name='Автор рецепта',
     )
     name = models.CharField(
-        max_length=256,
+        max_length=MAX_RECIPE_NAME_LENGTH,
         verbose_name='Название рецепта',
         help_text='Введите название рецепта.',
     )
@@ -175,7 +209,7 @@ class Recipe(models.Model):
         help_text='Выберите теги для рецепта.'
     )
     cooking_time = models.PositiveIntegerField(
-        validators=[MinValueValidator(1)],
+        validators=[MinValueValidator(MIN_COOKING_TIME)],
         verbose_name='Время приготовления (в минутах)',
         help_text='Введите время приготовления в минутах.'
     )
@@ -185,7 +219,7 @@ class Recipe(models.Model):
     )
 
     short_link = models.SlugField(
-        max_length=32,
+        max_length=MAX_SHORT_LINK_LENGTH,
         unique=True,
         blank=True,
         verbose_name='Короткая ссылка'
@@ -246,7 +280,7 @@ class RecipeIngredient(models.Model):
     )
     amount = models.PositiveIntegerField(
         verbose_name='Количество',
-        validators=[MinValueValidator(1)],
+        validators=[MinValueValidator(MIN_INGREDIENT_AMOUNT)],
         help_text='Введите количество ингредиента (больше 0).'
     )
 

@@ -1,8 +1,11 @@
+"""backend/foodgram/settings.py."""
+
 import os
 from pathlib import Path
 
 import environ
 from dotenv import load_dotenv
+from food.constants import DEFAULT_PAGE_SIZE
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
@@ -123,7 +126,7 @@ REST_FRAMEWORK = {
     ],
 
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    'PAGE_SIZE': 6,
+    'PAGE_SIZE': DEFAULT_PAGE_SIZE,
 
     'EXCEPTION_HANDLER': 'food.utils.custom_exception_handler',
     'DEFAULT_RENDERER_CLASSES': [
