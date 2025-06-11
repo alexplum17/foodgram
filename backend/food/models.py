@@ -25,7 +25,7 @@ from food.constants import (
 )
 
 
-def generate_hash(recipe_id):
+def generate_hash(recipe_id: int) -> str:
     """Генерирует хеш для короткой ссылки на рецепт."""
     hashids = Hashids(
         min_length=SHORT_LINK_MIN_LENGTH,
@@ -38,16 +38,27 @@ def generate_hash(recipe_id):
 class UserManager(BaseUserManager):
     """Менеджер для кастомной модели пользователя."""
 
-    def create_user(self, username, email, password, **extra_fields):
-        """Создает обычного пользователя."""
+    def create_user(
+            self,
+            username: str,
+            email: str,
+            password: str,
+            **extra_fields
+    ) -> 'User':
+        """Создает и сохраняет обычного пользователя."""
         email = self.normalize_email(email)
         user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
         user.save()
         return user
 
-    def create_superuser(self, username, email, password=None, **extra_fields):
-        """Создает суперпользователя."""
+    def create_superuser(self,
+                         username: str,
+                         email: str,
+                         password: str = None,
+                         **extra_fields
+                         ) -> 'User':
+        """Создает и сохраняет суперпользователя."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(username, email, password, **extra_fields)
@@ -85,18 +96,14 @@ class User(AbstractUser):
     objects = UserManager()
 
     class Meta:
-        """Мета-класс для модели User.
-
-        Определяет:
-        - Названия в админке
-        """
+        """Мета-класс для модели User."""
 
         app_label = 'food'
         swappable = 'AUTH_USER_MODEL'
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Возвращает строковое представление пользователя."""
         return f"{self.username} ({self.first_name} {self.last_name})"
 
@@ -122,24 +129,19 @@ class Tag(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели Tag.
-
-        Определяет метаданные модели:
-        - Название в единственном и множественном числе
-        - Порядок сортировки по умолчанию
-        """
+        """Мета-класс для модели Tag."""
 
         verbose_name = 'Тег'
         verbose_name_plural = 'Теги'
         ordering = ['name']
 
     def __str__(self) -> str:
-        """Возвращает строковое представление имени тега."""
+        """Возвращает строковое представление тега."""
         return self.name
 
 
 class Ingredient(models.Model):
-    """Модель, представляющая ингредиенты для рецептов."""
+    """Модель ингредиента для рецептов."""
 
     name = models.CharField(
         max_length=MAX_INGREDIENT_NAME_LENGTH,
@@ -153,12 +155,7 @@ class Ingredient(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели Ingredient.
-
-        Определяет:
-        - Ограничения уникальности
-        - Названия в админке
-        """
+        """Мета-класс для модели Ingredient."""
 
         constraints = [
             models.UniqueConstraint(
@@ -170,12 +167,12 @@ class Ingredient(models.Model):
         verbose_name_plural = 'Ингредиенты'
 
     def __str__(self) -> str:
-        """Возвращает строковое представление имени ингредиента."""
+        """Возвращает строковое представление ингредиента."""
         return f'{self.name} ({self.measurement_unit})'
 
 
 class Recipe(models.Model):
-    """Модель, представляющая рецепт."""
+    """Модель рецепта."""
 
     author = models.ForeignKey(
         User,
@@ -217,7 +214,6 @@ class Recipe(models.Model):
         auto_now_add=True,
         verbose_name='Дата создания'
     )
-
     short_link = models.SlugField(
         max_length=MAX_SHORT_LINK_LENGTH,
         unique=True,
@@ -226,19 +222,14 @@ class Recipe(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели Recipe.
-
-        Определяет:
-        - Названия в админке
-        - Порядок сортировки по умолчанию
-        """
+        """Мета-класс для модели Recipe."""
 
         verbose_name = 'Рецепт'
         verbose_name_plural = 'Рецепты'
         ordering = ['-created_at']
 
     def clean(self) -> None:
-        """Выполняет валидацию ингридиентов и тегов перед сохранением."""
+        """Проверяет наличие ингредиентов и тегов перед сохранением."""
         if self.pk:
             if not self.ingredients.exists():
                 raise ValidationError(
@@ -249,7 +240,7 @@ class Recipe(models.Model):
                     'Рецепт должен содержать хотя бы один тег'
                 )
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs) -> None:
         """Сохраняет рецепт, генерируя короткую ссылку при необходимости."""
         super().save(*args, **kwargs)
         if not self.short_link:
@@ -258,12 +249,12 @@ class Recipe(models.Model):
                 short_link=self.short_link)
 
     def __str__(self) -> str:
-        """Возвращает строковое представление названия рецепта."""
+        """Возвращает строковое представление рецепта."""
         return self.name
 
 
 class RecipeIngredient(models.Model):
-    """Модель, связывающая рецепты и ингредиенты с указанием количества."""
+    """Модель связи рецепта и ингредиента с указанием количества."""
 
     recipe = models.ForeignKey(
         Recipe,
@@ -285,12 +276,7 @@ class RecipeIngredient(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели RecipeIngredient.
-
-        Определяет:
-        - Ограничения уникальности
-        - Названия в админке
-        """
+        """Мета-класс для модели RecipeIngredient."""
 
         constraints = [
             models.UniqueConstraint(
@@ -322,12 +308,7 @@ class Profile(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели Profile.
-
-        Определяет:
-        - Названия в админке
-        - Порядок сортировки
-        """
+        """Мета-класс для модели Profile."""
 
         verbose_name = 'Профиль'
         verbose_name_plural = 'Профили'
@@ -355,12 +336,7 @@ class Follow(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели Follow.
-
-        Определяет:
-        - Ограничения уникальности
-        - Названия в админке
-        """
+        """Мета-класс для модели Follow."""
 
         constraints = [
             models.UniqueConstraint(
@@ -400,12 +376,7 @@ class Favorite(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели Favorite.
-
-        Определяет:
-        - Ограничения уникальности
-        - Названия в админке
-        """
+        """Мета-класс для модели Favorite."""
 
         constraints = [
             models.UniqueConstraint(
@@ -439,12 +410,7 @@ class ShoppingCart(models.Model):
     )
 
     class Meta:
-        """Мета-класс для модели ShoppingCart.
-
-        Определяет:
-        - Ограничения уникальности
-        - Названия в админке
-        """
+        """Мета-класс для модели ShoppingCart."""
 
         constraints = [
             models.UniqueConstraint(
