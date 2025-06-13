@@ -63,7 +63,7 @@ from api.serializers import (
 
 
 class BaseViewSet(viewsets.ViewSet):
-    """Базовый ViewSet с общими методами для всех наследников."""
+    """Базовый ViewSet с общим методом для всех наследников."""
 
     def paginate_queryset(self, queryset: QuerySet) -> Optional[QuerySet]:
         """Переопределяет пагинацию для поддержки параметра 'limit'."""
@@ -526,9 +526,9 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
                                ) -> HttpResponse:
         """Генерация TXT файла со списком ингредиентов."""
         response = HttpResponse(content_type='text/plain; charset=utf-8')
-        response['Content-Disposition'] = f'attachment; filename="{
-            SHOPPING_LIST_TXT_FILENAME}"'
-
+        response['Content-Disposition'] = (
+            f'attachment; filename="{SHOPPING_LIST_TXT_FILENAME}"'
+        )
         text = 'Список покупок:\n\n'
         for (name, unit), amount in sorted(ingredients.items()):
             text += f"- {name} ({unit}) — {amount}\n"
@@ -560,8 +560,9 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         pdf = buffer.getvalue()
         buffer.close()
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{
-            SHOPPING_LIST_PDF_FILENAME}"'
+        response['Content-Disposition'] = (
+            f'attachment; filename="{SHOPPING_LIST_PDF_FILENAME}"'
+        )
         response.write(pdf)
         return response
 
@@ -569,8 +570,9 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
                                ) -> HttpResponse:
         """Генерация CSV файла со списком ингредиентов."""
         response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = f'attachment; filename="{
-            SHOPPING_LIST_CSV_FILENAME}"'
+        response['Content-Disposition'] = (
+            f'attachment; filename="{SHOPPING_LIST_CSV_FILENAME}"'
+        )
         writer = csv.writer(response)
         writer.writerow(['Ингредиент', 'Единица измерения', 'Количество'])
         for (name, unit), amount in sorted(ingredients.items()):
