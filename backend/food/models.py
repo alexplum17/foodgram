@@ -218,6 +218,7 @@ class Recipe(models.Model):
         max_length=MAX_SHORT_LINK_LENGTH,
         unique=True,
         blank=True,
+        null=True,
         verbose_name='Короткая ссылка'
     )
 
@@ -242,10 +243,11 @@ class Recipe(models.Model):
 
     def save(self, *args, **kwargs) -> None:
         """Сохраняет рецепт, генерируя короткую ссылку при необходимости."""
+        is_new = not self.pk
         super().save(*args, **kwargs)
-        if not self.short_link and self.id:
+        if is_new and not self.short_link:
             self.short_link = generate_hash(self.id)
-        super().save(*args, **kwargs)
+            super().save(update_fields=['short_link'])
 
     def __str__(self) -> str:
         """Возвращает строковое представление рецепта."""

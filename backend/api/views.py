@@ -251,6 +251,15 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
             )
         return queryset
 
+    @action(detail=False, methods=['get'], url_path='s/(?P<short_link>[^/.]+)')
+    def retrieve_by_short_link(
+        self, request: HttpRequest, short_link: Optional[str] = None
+    ) -> Response:
+        """Получает рецепт по короткой ссылке."""
+        recipe = get_object_or_404(Recipe, short_link=short_link)
+        serializer = self.get_serializer(recipe)
+        return Response(serializer.data)
+
     @action(detail=True,
             methods=('get',),
             url_path='get-link',
@@ -263,8 +272,10 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         if not recipe.short_link:
             recipe.short_link = generate_hash()
             recipe.save()
-        short_url: str = request.build_absolute_uri(f'/s/{recipe.short_link}/')
-        return Response({'short-link': short_url})
+        return Response({
+            'short-link': request.build_absolute_uri(
+                f'/s/{recipe.short_link}/')
+        })
 
     def get_serializer_context(self) -> Dict[str, Any]:
         """Добавляет запрос в контекст сериализатора."""
