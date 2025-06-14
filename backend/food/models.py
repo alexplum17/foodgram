@@ -243,10 +243,9 @@ class Recipe(models.Model):
     def save(self, *args, **kwargs) -> None:
         """Сохраняет рецепт, генерируя короткую ссылку при необходимости."""
         super().save(*args, **kwargs)
-        if not self.short_link:
+        if not self.short_link and self.id:
             self.short_link = generate_hash(self.id)
-            Recipe.objects.filter(id=self.id).update(
-                short_link=self.short_link)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         """Возвращает строковое представление рецепта."""

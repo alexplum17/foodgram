@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db.models import Exists, OuterRef, QuerySet
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
 from food.constants import (
@@ -60,6 +60,13 @@ from api.serializers import (
     TagSerializer,
     UserSerializer,
 )
+
+
+def short_link_redirect(request: HttpRequest, short_link: str
+                        ) -> HttpResponseRedirect:
+    """Перенаправляет пользователя на полный URL рецепта по короткой ссылке."""
+    recipe = get_object_or_404(Recipe, short_link=short_link)
+    return redirect(f'/recipes/{recipe.id}/')
 
 
 class BaseViewSet(viewsets.ViewSet):
@@ -256,10 +263,8 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         if not recipe.short_link:
             recipe.short_link = generate_hash()
             recipe.save()
-        return Response({
-            'short-link': request.build_absolute_uri(
-                f'/s/{recipe.short_link}/')
-        })
+        short_url: str = request.build_absolute_uri(f'/s/{recipe.short_link}/')
+        return Response({'short-link': short_url})
 
     def get_serializer_context(self) -> Dict[str, Any]:
         """Добавляет запрос в контекст сериализатора."""
