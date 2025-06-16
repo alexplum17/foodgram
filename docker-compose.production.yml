@@ -4,6 +4,7 @@ volumes:
   pg_data:
   static:
   media:
+  docs:
 
 services:
   db:
@@ -16,8 +17,6 @@ services:
   backend:
     image: alexplum17/foodgram_backend
     env_file: .env
-    ports:
-      - "8000:8000"
     depends_on:
       - db
     volumes:
@@ -32,10 +31,12 @@ services:
   nginx:
     image: alexplum17/foodgram_nginx
     ports:
-      - "80:80"
+      - "8000:80"
     volumes:
-      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./frontend/build:/usr/share/nginx/html
-      - ./docs/:/usr/share/nginx/html/api/docs/
+      - docs:/usr/share/nginx/html/api/docs/
       - media:/usr/share/nginx/html/media/
       - static:/usr/share/nginx/html/backend_static/
+    depends_on:
+      - backend
+      - frontend

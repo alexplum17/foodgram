@@ -1,23 +1,28 @@
 """backend/foodgram/settings.py."""
 
 import os
+import sys
 from pathlib import Path
 
 import environ
-from dotenv import load_dotenv
 from food.constants import DEFAULT_PAGE_SIZE
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-env = environ.Env()
 
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+env = environ.Env(
+    DEBUG=(bool, False),
+    SECRET_KEY=(str, ''),
+    ALLOWED_HOSTS=(list, ['*']),
+)
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+env_file = environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-DEBUG = env.bool('DEBUG', default=False)
+SECRET_KEY = env('SECRET_KEY')
+DEBUG = env('DEBUG')
+ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
-
+if DEBUG and 'runserver' not in sys.argv:
+    raise ValueError("DEBUG=True не разрешен в production среде!")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -150,3 +155,9 @@ DJOSER = {
 }
 
 AUTH_USER_MODEL = 'food.User'
+
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://fdgrm.sytes.net',
+    'http://localhost:8000',
+]
