@@ -1,0 +1,198 @@
+# .github/workflows/main.yml
+name: Main workflow  # Название workflow
+
+# Триггер: запускать при пуше в ветку main
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Job 1: Тесты бэкенда
+  backend_tests:
+    runs-on: ubuntu-latest  # Запуск на последней Ubuntu
+    
+    # Сервис PostgreSQL для тестов
+    services:
+      postgres:
+        image: postgres:13.10  # Версия PostgreSQL
+        env:
+          POSTGRES_USER: django_user
+          POSTGRES_PASSWORD: mysecretpassword
+          POSTGRES_DB: django
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3  # Клонирование репозитория
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9  # Установка Python 3.9
+        
+    - name: Install dependencies
+      run: |  # Установка линтеров и зависимостей
+        python -m pip install --upgrade pip 
+        pip install flake8==6.0.0 flake8-isort==6.0.0
+        pip install -r ./backend/requirements.txt
+        
+    - name: Test with flake8 and django tests
+      env:  # Переменные окружения для тестов
+        POSTGRES_USER: django_user
+        POSTGRES_PASSWORD: mysecretpassword
+        POSTGRES_DB: django
+        DB_HOST: 127.0.0.1  # Хост PostgreSQL
+        DB_PORT: 5432  # Порт PostgreSQL
+      run: | # Проверка стиля кода
+        python -m flake8 backend/  
+
+  # Job 2: Сборка и публикация образа бэкенда
+  build_backend_and_push_to_docker_hub:
+    name: Push backend Docker image to DockerHub
+    runs-on: ubuntu-latest
+    needs: backend_tests  # Зависит от успешного прохождения тестов
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      - name: Set up Docker Buildx  # Настройка Buildx для сборки
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Login to Docker  # Авторизация в Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }} 
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Push to DockerHub  # Сборка и публикация
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/  # Контекст сборки
+          push: true  # Пуш образа
+          tags: alexplum17/foodgram_backend:latest  # Тег образа
+
+  # Job 3: Тесты фронтенда
+  frontend_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up nodeJS  # Установка Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18  # Версия Node.js
+
+    - name: Install dependencies  # Установка npm-зависимостей
+      run: |
+        cd frontend/
+        npm ci
+
+    - name: Test frontend  # Запуск тестов
+      run: |
+        cd frontend/
+        npm run test
+
+  # Job 4: Сборка и публикация фронтенда
+  build_frontend_and_push_to_docker_hub:
+    name: Push frontend Docker image to DockerHub
+    runs-on: ubuntu-latest
+    needs: frontend_tests  # Зависит от тестов фронтенда
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Login to Docker
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Push to DockerHub
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend/
+          push: true
+          tags: alexplum17/foodgram_frontend:latest
+
+  # Job 5: Сборка и публикация Nginx (gateway)
+  build_gateway_and_push_to_docker_hub:
+    name: Push gateway Docker image to DockerHub
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Login to Docker
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Push to DockerHub
+        uses: docker/build-push-action@v4
+        with:
+          context: ./nginx/  # Сборка Nginx
+          push: true
+          tags: alexplum17/foodgram_nginx:latest
+
+  # Job 6: Деплой на сервер
+  deploy:
+    runs-on: ubuntu-latest
+    needs:  # Зависит от успешной сборки всех образов
+      - build_backend_and_push_to_docker_hub
+      - build_frontend_and_push_to_docker_hub
+      - build_gateway_and_push_to_docker_hub
+      
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+      
+    - name: Copy docker-compose.yml via ssh  # Копирование файла на сервер
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USER }}
+        key: ${{ secrets.SSH_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        source: "docker-compose.production.yml"
+        target: "foodgram"
+        
+    - name: Executing remote ssh commands to deploy  # Выполнение команд на сервере
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USER }}
+        key: ${{ secrets.SSH_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        script: | # Обновление и запуск образов, миграция и сбор статики
+          cd kittygram
+          sudo docker compose -f docker-compose.production.yml pull
+          sudo docker compose -f docker-compose.production.yml down
+          sudo docker compose -f docker-compose.production.yml up -d
+          sudo docker compose -f docker-compose.production.yml exec backend python manage.py migrate
+          sudo docker compose -f docker-compose.production.yml exec backend python manage.py collectstatic
+          sudo docker compose -f docker-compose.production.yml exec backend cp -r /app/collected_static/. /backend_static/static/
+
+  # Job 7: Уведомление в Telegram
+  send_message:
+    runs-on: ubuntu-latest
+    needs: deploy  # После успешного деплоя
+    
+    steps:
+    - name: Send message
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_TO }}  # ID получателя
+        token: ${{ secrets.TELEGRAM_TOKEN }}  # Токен бота
+        message: Деплой успешно выполнен!  # Текст сообщения
