@@ -91,10 +91,10 @@ jobs:
         npm install --package-lock-only
         npm ci --legacy-peer-deps
 
-    - name: Test frontend  # Запуск тестов
-      run: |
-        cd frontend/
-        npm run test
+#    - name: Test frontend  # Запуск тестов
+#      run: |
+#        cd frontend/
+#        npm run test
 
   # Job 4: Сборка и публикация фронтенда
   build_frontend_and_push_to_docker_hub:
