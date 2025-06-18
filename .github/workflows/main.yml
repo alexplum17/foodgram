@@ -121,7 +121,7 @@ jobs:
           push: true
           tags: alexplum17/foodgram_frontend:latest
 
-  # Job 5: Сборка и публикация Nginx (gateway)
+  # Job 5: Сборка и публикация Nginx (infra)
   build_gateway_and_push_to_docker_hub:
     name: Push gateway Docker image to DockerHub
     runs-on: ubuntu-latest
@@ -142,7 +142,7 @@ jobs:
       - name: Push to DockerHub
         uses: docker/build-push-action@v4
         with:
-          context: ./nginx/  # Сборка Nginx
+          context: ./infra/  # Сборка Nginx
           push: true
           tags: alexplum17/foodgram_nginx:latest
 
