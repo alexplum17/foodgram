@@ -11,6 +11,7 @@ django.setup()
 
 
 def import_csv(filename):
+    """Импортирует данные из CSV-файла в модель Ingredient."""
     with open(filename, 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
         next(reader)

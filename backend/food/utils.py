@@ -1,3 +1,5 @@
+"""backend/food/utils.py."""
+
 import logging
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -7,7 +9,9 @@ from rest_framework.views import exception_handler
 
 logger = logging.getLogger(__name__)
 
+
 def custom_exception_handler(exc, context):
+    """Кастомный обработчик исключений для API."""
     response = exception_handler(exc, context)
     if response is None and isinstance(exc, ObjectDoesNotExist):
         exc = NotFound(detail='Объект не найден')
@@ -17,7 +21,5 @@ def custom_exception_handler(exc, context):
             "detail": 'Объект не найден'
         }
         logger.debug(f"404 Not Found - {context['request'].method}"
-                     "{context['request'].path}"
-        )
-
+                     "{context['request'].path}")
     return response

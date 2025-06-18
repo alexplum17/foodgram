@@ -2,18 +2,8 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-
-from food.models import (
-    Favorite,
-    Follow,
-    Ingredient,
-    Profile,
-    Recipe,
-    RecipeIngredient,
-    ShoppingCart,
-    Tag,
-    User,
-)
+from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
+                         RecipeIngredient, ShoppingCart, Tag, User)
 
 
 @admin.register(Tag)

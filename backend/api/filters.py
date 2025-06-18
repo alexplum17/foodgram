@@ -18,6 +18,8 @@ class RecipeFilter(filters.FilterSet):
     )
 
     class Meta:
+        """Мета-класс для RecipeFilter."""
+
         model = Recipe
         fields = ['author', 'tags', 'is_favorited', 'is_in_shopping_cart']
 

@@ -83,11 +83,12 @@ jobs:
     - name: Set up nodeJS  # Установка Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: 18  # Версия Node.js
+        node-version: 21.7.1  # Версия Node.js
 
     - name: Install dependencies  # Установка npm-зависимостей
       run: |
         cd frontend/
+        npm install --package-lock-only
         npm ci
 
     - name: Test frontend  # Запуск тестов
