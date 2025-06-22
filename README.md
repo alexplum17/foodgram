@@ -180,7 +180,8 @@ POST /api/users/{id}/subscribe/
 
  - ###### Отправку уведомлений в Telegram об успешном деплое
 
-## **Примечание**
+
+## **Требуемые Secrets для развертывания:**
 ```
 DOCKER_USERNAME: Логин Docker Hub
 DOCKER_PASSWORD: Пароль Docker Hub
