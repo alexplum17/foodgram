@@ -5,34 +5,61 @@ from collections import defaultdict
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from api.filters import RecipeFilter
-from api.permissions import IsAuthorOrReadOnly
-from api.serializers import (AvatarUpdateSerializer, FavoriteSerializer,
-                             FollowSerializer, IngredientSerializer,
-                             RecipeSerializer, ShoppingCartSerializer,
-                             TagSerializer, UserSerializer)
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db.models import Exists, OuterRef, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
-from food.constants import (MAX_PAGE_SIZE, PDF_FONT_BOLD, PDF_FONT_REGULAR,
-                            PDF_LINE_HEIGHT, PDF_MIN_Y, PDF_REGULAR_FONT_SIZE,
-                            PDF_START_X, PDF_START_Y, PDF_TITLE_FONT_SIZE,
-                            PDF_TITLE_Y, SHOPPING_LIST_CSV_FILENAME,
-                            SHOPPING_LIST_PDF_FILENAME,
-                            SHOPPING_LIST_TXT_FILENAME)
-from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
-                         ShoppingCart, Tag, User, generate_hash)
+from food.constants import (
+    MAX_PAGE_SIZE,
+    PDF_FONT_BOLD,
+    PDF_FONT_REGULAR,
+    PDF_LINE_HEIGHT,
+    PDF_MIN_Y,
+    PDF_REGULAR_FONT_SIZE,
+    PDF_START_X,
+    PDF_START_Y,
+    PDF_TITLE_FONT_SIZE,
+    PDF_TITLE_Y,
+    SHOPPING_LIST_CSV_FILENAME,
+    SHOPPING_LIST_PDF_FILENAME,
+    SHOPPING_LIST_TXT_FILENAME,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Profile,
+    Recipe,
+    ShoppingCart,
+    Tag,
+    User,
+    generate_hash,
+)
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import (IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly)
+from rest_framework.permissions import (
+    IsAuthenticated,
+    IsAuthenticatedOrReadOnly,
+)
 from rest_framework.response import Response
+
+from api.filters import RecipeFilter
+from api.permissions import IsAuthorOrReadOnly
+from api.serializers import (
+    AvatarUpdateSerializer,
+    FavoriteSerializer,
+    FollowSerializer,
+    IngredientSerializer,
+    RecipeSerializer,
+    ShoppingCartSerializer,
+    TagSerializer,
+    UserSerializer,
+)
 
 
 def short_link_redirect(request: HttpRequest, short_link: str
@@ -78,41 +105,6 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
             return super().get_serializer_class()
         return UserSerializer
 
-    def create(self, request: HttpRequest, *args: Any, **kwargs: Any
-               ) -> Response:
-        """Создает нового пользователя с валидацией обязательных полей."""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        if not serializer.validated_data.get('email'):
-            return Response(
-                {'email': 'Email обязателен для регистрации.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if not serializer.validated_data.get('first_name'):
-            return Response(
-                {'first_name': 'Имя обязательно для регистрации.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if not serializer.validated_data.get('last_name'):
-            return Response(
-                {'last_name': 'Фамилия обязательна для регистрации.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if User.objects.filter(email=serializer.validated_data['email']
-                               ).exists():
-            return Response(
-                {'email': 'Пользователь с таким email уже существует.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(
-            serializer.data,
-            status=status.HTTP_201_CREATED,
-            headers=headers
-        )
-
     @action(['post'], detail=False, permission_classes=[IsAuthenticated])
     def set_password(self, request: HttpRequest, *args: Any, **kwargs: Any
                      ) -> Response:
@@ -128,7 +120,10 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
     def avatar(self, request: HttpRequest) -> Response:
         """Управление аватаром пользователя."""
         user = request.user
-        profile, created = Profile.objects.get_or_create(user=user)
+        try:
+            profile = user.profile
+        except ObjectDoesNotExist:
+            profile = Profile.objects.create(user=user)
         if request.method == 'PUT':
             serializer = AvatarUpdateSerializer(data=request.data)
             if not serializer.is_valid():
@@ -136,23 +131,21 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
                                 status=status.HTTP_400_BAD_REQUEST)
             serializer.update(user, serializer.validated_data)
             return Response(
-                {'avatar': user.profile.avatar.url},
+                {'avatar': profile.avatar.url},
                 status=status.HTTP_200_OK
             )
-        elif request.method == 'DELETE':
-            if not user.profile.avatar:
-                return Response(
-                    {"detail": "Аватар не найден"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            user.profile.avatar.delete()
-            user.profile.avatar = None
-            user.profile.save()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        if not profile.avatar:
+            return Response(
+                {"detail": "Аватар не найден"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        profile.avatar.delete()
+        profile.avatar = None
+        profile.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'],
-            permission_classes=[IsAuthenticated]
-            )
+            permission_classes=[IsAuthenticated])
     def me(self, request: HttpRequest) -> Response:
         """Возвращает данные текущего пользователя."""
         serializer = self.get_serializer(request.user)
@@ -307,17 +300,13 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
             )
             serializer = FavoriteSerializer(favorite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        elif request.method == 'DELETE':
-            favorite = Favorite.objects.filter(
-                user=request.user, favorite=recipe
-            ).first()
-            if not favorite:
-                return Response(
-                    {'errors': 'Рецепта нет в избранном'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            favorite.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        if not favorite:
+            return Response(
+                {'errors': 'Рецепта нет в избранном'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        favorite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])

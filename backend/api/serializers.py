@@ -6,11 +6,24 @@ from typing import Any, Dict, List, Optional, Union
 from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
-from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
-                            MAX_LAST_NAME_LENGTH, MAX_USERNAME_LENGTH,
-                            MIN_COOKING_TIME, MIN_INGREDIENT_AMOUNT)
-from food.models import (Favorite, Follow, Ingredient, Recipe,
-                         RecipeIngredient, ShoppingCart, Tag, User)
+from food.constants import (
+    MAX_EMAIL_LENGTH,
+    MAX_FIRST_NAME_LENGTH,
+    MAX_LAST_NAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart,
+    Tag,
+    User,
+)
 from rest_framework import serializers, status
 
 
@@ -156,20 +169,44 @@ class UserCreateSerializer(BaseUserCreateSerializer):
     first_name = serializers.CharField(
         required=True,
         allow_blank=False,
-        max_length=MAX_FIRST_NAME_LENGTH
+        max_length=MAX_FIRST_NAME_LENGTH,
+        error_messages={
+            'required': 'Имя обязательно для регистрации.',
+            'blank': 'Имя не может быть пустым.',
+            'max_length': f'Имя не может превышать '
+                          f'{MAX_FIRST_NAME_LENGTH} символов.'
+        }
     )
     last_name = serializers.CharField(
         required=True,
         allow_blank=False,
-        max_length=MAX_LAST_NAME_LENGTH
+        max_length=MAX_LAST_NAME_LENGTH,
+        error_messages={
+            'required': 'Фамилия обязательна для регистрации.',
+            'blank': 'Фамилия не может быть пустой.',
+            'max_length': f'Фамилия не может превышать '
+                          f'{MAX_LAST_NAME_LENGTH} символов.'
+        }
     )
     email = serializers.EmailField(
         required=True,
-        max_length=MAX_EMAIL_LENGTH
+        max_length=MAX_EMAIL_LENGTH,
+        error_messages={
+            'required': 'Email обязателен для регистрации.',
+            'invalid': ('Введите корректный email адрес.'
+                        'Email должен содержать символ "@"'),
+            'max_length': f'Email не может превышать '
+                          f'{MAX_EMAIL_LENGTH} символов.'
+        }
     )
     username = serializers.CharField(
         max_length=MAX_USERNAME_LENGTH,
-        validators=[AbstractUser.username_validator]
+        validators=[AbstractUser.username_validator],
+        error_messages={
+            'blank': 'Имя пользователя не может быть пустым.',
+            'max_length': f'Имя пользователя не может превышать '
+                          f'{MAX_USERNAME_LENGTH} символов.',
+        }
     )
 
     class Meta(BaseUserCreateSerializer.Meta):
@@ -185,62 +222,23 @@ class UserCreateSerializer(BaseUserCreateSerializer):
             'password'
         )
         extra_kwargs = {
-            'password': {'write_only': True}
+            'password': {
+                'write_only': True,
+                'error_messages': {
+                    'blank': 'Пароль не может быть пустым.'
+                }
+            }
         }
 
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Проверяет валидность данных пользователя."""
-        required_fields = ['email', 'first_name', 'last_name']
-        for field in required_fields:
-            if not data.get(field):
-                raise serializers.ValidationError(
-                    {field: 'Это поле обязательно для заполнения.'},
-                    code=status.HTTP_400_BAD_REQUEST
-                )
-            if field in ['first_name', 'last_name'] and not data[field].strip(
-            ):
-                raise serializers.ValidationError(
-                    {field: 'Это поле не может быть пустым.'},
-                    code=status.HTTP_400_BAD_REQUEST
-                )
+        # Проверка уникальности email
         if User.objects.filter(email=data['email']).exists():
             raise serializers.ValidationError(
                 {'email': 'Пользователь с таким email уже существует.'},
                 code=status.HTTP_400_BAD_REQUEST
             )
         return data
-
-    def validate_username(self, value: str) -> str:
-        """Проверяет валидность имени пользователя."""
-        if not value.strip():
-            raise serializers.ValidationError(
-                'Имя пользователя не может быть пустым.',
-                code=status.HTTP_400_BAD_REQUEST
-            )
-        if len(value) > MAX_USERNAME_LENGTH:
-            raise serializers.ValidationError(
-                'Имя пользователя не может превышать 150 символов.',
-                code=status.HTTP_400_BAD_REQUEST
-            )
-        return value.strip()
-
-    def validate_email(self, value: str) -> str:
-        """Проверяет валидность email."""
-        if len(value) > MAX_EMAIL_LENGTH:
-            raise serializers.ValidationError(
-                'Email не может превышать 254 символа.',
-                code=status.HTTP_400_BAD_REQUEST
-            )
-        return value
-
-    def validate_password(self, value: str) -> str:
-        """Проверяет валидность пароля."""
-        if not value.strip():
-            raise serializers.ValidationError(
-                'Пароль не может быть пустым.',
-                code=status.HTTP_400_BAD_REQUEST
-            )
-        return value
 
 
 class UserSerializer(serializers.ModelSerializer):

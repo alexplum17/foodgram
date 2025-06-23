@@ -181,7 +181,7 @@ POST /api/users/{id}/subscribe/
  - ###### Отправку уведомлений в Telegram об успешном деплое
 
 
-## **Требуемые Secrets для развертывания:**
+## *Требуемые Secrets для развертывания:*
 ```
 DOCKER_USERNAME: Логин Docker Hub
 DOCKER_PASSWORD: Пароль Docker Hub
@@ -197,3 +197,4 @@ TELEGRAM_TOKEN: Токен Telegram бота
 Для работы с API необходимо использовать токены аутентификации. Убедитесь, что пользователь аутентифицирован перед выполнением операции.
 
 Проект разработан **alexplum17**.
+Ссылка на профиль в GitHub: **https://github.com/alexplum17**
