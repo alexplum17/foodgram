@@ -1,7 +1,7 @@
 """backend/api/urls.py."""
 
 from api.views import (FollowViewSet, IngredientViewSet, RecipeViewSet,
-                       ShoppingCartViewSet, TagViewSet, UserViewSet)
+                       TagViewSet, UserViewSet)
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
@@ -20,13 +20,6 @@ urlpatterns = [
         'post': 'create',
         'delete': 'destroy'
     }), name='subscribe'),
-    path('recipes/<int:id>/shopping_cart/', ShoppingCartViewSet.as_view({
-        'post': 'create',
-        'delete': 'destroy'
-    }), name='shopping_cart'),
-    path('recipes/download_shopping_cart/', ShoppingCartViewSet.as_view({
-        'get': 'download'
-    }), name='download_shopping_cart'),
     path('', include(router.urls)),
     path('', include('djoser.urls')),
     path('auth/', include('djoser.urls.authtoken')),

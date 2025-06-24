@@ -5,6 +5,12 @@ from collections import defaultdict
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
+from api.filters import RecipeFilter
+from api.permissions import IsAuthorOrReadOnly
+from api.serializers import (AvatarUpdateSerializer, FavoriteSerializer,
+                             FollowSerializer, IngredientSerializer,
+                             RecipeSerializer, ShoppingCartSerializer,
+                             TagSerializer, UserSerializer)
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db.models import Exists, OuterRef, QuerySet
@@ -12,54 +18,21 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
-from food.constants import (
-    MAX_PAGE_SIZE,
-    PDF_FONT_BOLD,
-    PDF_FONT_REGULAR,
-    PDF_LINE_HEIGHT,
-    PDF_MIN_Y,
-    PDF_REGULAR_FONT_SIZE,
-    PDF_START_X,
-    PDF_START_Y,
-    PDF_TITLE_FONT_SIZE,
-    PDF_TITLE_Y,
-    SHOPPING_LIST_CSV_FILENAME,
-    SHOPPING_LIST_PDF_FILENAME,
-    SHOPPING_LIST_TXT_FILENAME,
-)
-from food.models import (
-    Favorite,
-    Follow,
-    Ingredient,
-    Profile,
-    Recipe,
-    ShoppingCart,
-    Tag,
-    User,
-    generate_hash,
-)
+from food.constants import (MAX_PAGE_SIZE, PDF_FONT_BOLD, PDF_FONT_REGULAR,
+                            PDF_LINE_HEIGHT, PDF_MIN_Y, PDF_REGULAR_FONT_SIZE,
+                            PDF_START_X, PDF_START_Y, PDF_TITLE_FONT_SIZE,
+                            PDF_TITLE_Y, SHOPPING_LIST_CSV_FILENAME,
+                            SHOPPING_LIST_PDF_FILENAME,
+                            SHOPPING_LIST_TXT_FILENAME)
+from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
+                         ShoppingCart, Tag, User, generate_hash)
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import (
-    IsAuthenticated,
-    IsAuthenticatedOrReadOnly,
-)
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
-
-from api.filters import RecipeFilter
-from api.permissions import IsAuthorOrReadOnly
-from api.serializers import (
-    AvatarUpdateSerializer,
-    FavoriteSerializer,
-    FollowSerializer,
-    IngredientSerializer,
-    RecipeSerializer,
-    ShoppingCartSerializer,
-    TagSerializer,
-    UserSerializer,
-)
 
 
 def short_link_redirect(request: HttpRequest, short_link: str
@@ -253,7 +226,9 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         """Определяет уровень доступа для разных действий."""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             permission_classes = [IsAuthenticated]
-        elif self.action in ['favorite', 'shopping_cart']:
+        elif self.action in (['favorite',
+                              'shopping_cart',
+                              'download_shopping_cart']):
             permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAuthenticatedOrReadOnly]
@@ -300,6 +275,10 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
             )
             serializer = FavoriteSerializer(favorite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        favorite = Favorite.objects.filter(
+            user=request.user,
+            favorite=recipe
+        ).first()
         if not favorite:
             return Response(
                 {'errors': 'Рецепта нет в избранном'},
@@ -327,127 +306,8 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
             )
             serializer = ShoppingCartSerializer(shopping_cart)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        elif request.method == 'DELETE':
-            shopping_cart = ShoppingCart.objects.filter(
-                user=request.user, recipe=recipe
-            ).first()
-            if not shopping_cart:
-                return Response(
-                    {'errors': 'Рецепта нет в списке покупок'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            shopping_cart.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class FollowViewSet(viewsets.ModelViewSet, BaseViewSet):
-    """Управление подписками на пользователей."""
-
-    queryset = Follow.objects.all()
-    serializer_class = FollowSerializer
-    pagination_class = PageNumberPagination
-    http_method_names = ['get', 'post', 'delete']
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self) -> List[Follow]:
-        """Возвращает подписки текущего пользователя."""
-        return Follow.objects.filter(user=self.request.user
-                                     ).select_related('following')
-
-    def get_serializer_context(self) -> Dict[str, Any]:
-        """Добавляет запрос в контекст сериализатора."""
-        context = super().get_serializer_context()
-        context['request'] = self.request
-        return context
-
-    def list(self, request, *args, **kwargs) -> Response:
-        """Возвращает список подписок текущего пользователя."""
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-
-    def create(self, request, *args, **kwargs) -> Response:
-        """Создает подписку на пользователя."""
-        following_id = kwargs.get('id')
-        if not following_id:
-            return Response(
-                {'errors': 'ID пользователя не указан'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        following = get_object_or_404(User, id=following_id)
-        if request.user == following:
-            return Response(
-                {'errors': 'Нельзя подписаться на самого себя'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if Follow.objects.filter(user=request.user, following=following
-                                 ).exists():
-            return Response(
-                {'errors': 'Вы уже подписаны на этого пользователя'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        follow = Follow.objects.create(user=request.user, following=following)
-        serializer = self.get_serializer(follow)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def destroy(self, request, *args, **kwargs) -> Response:
-        """Удаляет подписку на пользователя."""
-        following_id = kwargs.get('id')
-        following = get_object_or_404(User, id=following_id)
-        follow = Follow.objects.filter(
-            user=request.user,
-            following=following
-        ).first()
-        if not follow:
-            return Response(
-                {'errors': 'Вы не подписаны на этого пользователя'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        follow.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class ShoppingCartViewSet(viewsets.ModelViewSet):
-    """
-    Управление списком покупок.
-
-    Поддерживает скачивание списка ингредиентов в форматах TXT, PDF и CSV.
-    """
-
-    permission_classes = [IsAuthenticated]
-    queryset = ShoppingCart.objects.all()
-    serializer_class = ShoppingCartSerializer
-    http_method_names = ['get', 'post', 'delete']
-
-    def create(self, request, *args, **kwargs) -> Response:
-        """Добавляет рецепт в список покупок."""
-        recipe_id = kwargs.get('id')
-        recipe = get_object_or_404(Recipe, id=recipe_id)
-        if ShoppingCart.objects.filter(user=request.user, recipe=recipe
-                                       ).exists():
-            return Response(
-                {'errors': 'Рецепт уже в списке покупок'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        shopping_cart = ShoppingCart.objects.create(
-            user=request.user,
-            recipe=recipe
-        )
-        serializer = self.get_serializer(shopping_cart)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def destroy(self, request, *args, **kwargs) -> Response:
-        """Удаляет рецепт из списка покупок."""
-        recipe_id = kwargs.get('id')
-        recipe = get_object_or_404(Recipe, id=recipe_id)
-
         shopping_cart = ShoppingCart.objects.filter(
-            user=request.user,
-            recipe=recipe
+            user=request.user, recipe=recipe
         ).first()
         if not shopping_cart:
             return Response(
@@ -457,8 +317,10 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         shopping_cart.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=False, methods=['get'])
-    def download(self, request) -> Response:
+    @action(detail=False, methods=['get'],
+            permission_classes=[IsAuthenticated],
+            url_path='download_shopping_cart')
+    def download_shopping_cart(self, request) -> Response:
         """Скачивание списка ингредиентов для рецептов в корзине."""
         user = request.user
         recipe_ids = request.query_params.get('recipe_ids')
@@ -556,3 +418,74 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         for (name, unit), amount in sorted(ingredients.items()):
             writer.writerow([name, unit, amount])
         return response
+
+
+class FollowViewSet(viewsets.ModelViewSet, BaseViewSet):
+    """Управление подписками на пользователей."""
+
+    queryset = Follow.objects.all()
+    serializer_class = FollowSerializer
+    pagination_class = PageNumberPagination
+    http_method_names = ['get', 'post', 'delete']
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self) -> List[Follow]:
+        """Возвращает подписки текущего пользователя."""
+        return Follow.objects.filter(user=self.request.user
+                                     ).select_related('following')
+
+    def get_serializer_context(self) -> Dict[str, Any]:
+        """Добавляет запрос в контекст сериализатора."""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def list(self, request, *args, **kwargs) -> Response:
+        """Возвращает список подписок текущего пользователя."""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs) -> Response:
+        """Создает подписку на пользователя."""
+        following_id = kwargs.get('id')
+        if not following_id:
+            return Response(
+                {'errors': 'ID пользователя не указан'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        following = get_object_or_404(User, id=following_id)
+        if request.user == following:
+            return Response(
+                {'errors': 'Нельзя подписаться на самого себя'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if Follow.objects.filter(user=request.user, following=following
+                                 ).exists():
+            return Response(
+                {'errors': 'Вы уже подписаны на этого пользователя'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        follow = Follow.objects.create(user=request.user, following=following)
+        serializer = self.get_serializer(follow)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs) -> Response:
+        """Удаляет подписку на пользователя."""
+        following_id = kwargs.get('id')
+        following = get_object_or_404(User, id=following_id)
+        follow = Follow.objects.filter(
+            user=request.user,
+            following=following
+        ).first()
+        if not follow:
+            return Response(
+                {'errors': 'Вы не подписаны на этого пользователя'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        follow.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
