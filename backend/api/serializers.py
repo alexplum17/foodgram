@@ -6,11 +6,24 @@ from typing import Any, Dict, List, Optional, Union
 from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
-from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
-                            MAX_LAST_NAME_LENGTH, MAX_USERNAME_LENGTH,
-                            MIN_COOKING_TIME, MIN_INGREDIENT_AMOUNT)
-from food.models import (Favorite, Follow, Ingredient, Recipe,
-                         RecipeIngredient, ShoppingCart, Tag, User)
+from food.constants import (
+    MAX_EMAIL_LENGTH,
+    MAX_FIRST_NAME_LENGTH,
+    MAX_LAST_NAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart,
+    Tag,
+    User,
+)
 from rest_framework import serializers, status
 
 
@@ -492,7 +505,6 @@ class FollowSerializer(serializers.ModelSerializer):
         """Проверяет данные перед созданием подписки."""
         following = self.context.get('following')
         user = self.context['request'].user
-        print(f'user: {user}')
         if user == following:
             raise serializers.ValidationError(
                 'Нельзя подписаться на самого себя')
