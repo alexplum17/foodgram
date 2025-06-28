@@ -5,26 +5,12 @@ from typing import Any, Dict, List, Optional, Union
 
 from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
-from django.shortcuts import get_object_or_404
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
-from food.constants import (
-    MAX_EMAIL_LENGTH,
-    MAX_FIRST_NAME_LENGTH,
-    MAX_LAST_NAME_LENGTH,
-    MAX_USERNAME_LENGTH,
-    MIN_COOKING_TIME,
-    MIN_INGREDIENT_AMOUNT,
-)
-from food.models import (
-    Favorite,
-    Follow,
-    Ingredient,
-    Recipe,
-    RecipeIngredient,
-    ShoppingCart,
-    Tag,
-    User,
-)
+from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
+                            MAX_LAST_NAME_LENGTH, MAX_USERNAME_LENGTH,
+                            MIN_COOKING_TIME, MIN_INGREDIENT_AMOUNT)
+from food.models import (Favorite, Follow, Ingredient, Recipe,
+                         RecipeIngredient, ShoppingCart, Tag, User)
 from rest_framework import serializers, status
 
 
@@ -459,6 +445,7 @@ class ShoppingCartSerializer(serializers.ModelSerializer):
 
 class FollowSerializer(serializers.ModelSerializer):
     """Сериализатор для модели Follow (подписки на пользователей)."""
+
     is_subscribed = IsFollowedField(source='following', read_only=True)
     email = serializers.ReadOnlyField(source='following.email')
     id = serializers.ReadOnlyField(source='following.id')
@@ -470,9 +457,12 @@ class FollowSerializer(serializers.ModelSerializer):
         source='following.recipes.count',
         read_only=True
     )
-    avatar = Base64ImageField(source='following.profile.avatar', read_only=True)
+    avatar = Base64ImageField(source='following.profile.avatar',
+                              read_only=True)
 
     class Meta:
+        """Мета-класс для настройки сериализатора FollowSerializer."""
+
         model = Follow
         fields = (
             'email',
@@ -500,15 +490,15 @@ class FollowSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """Проверяет данные перед созданием подписки."""
-        following = self.context.get('following')  # получаем из контекста
+        following = self.context.get('following')
         user = self.context['request'].user
-        
+        print(f'user: {user}')
         if user == following:
-            raise serializers.ValidationError("Нельзя подписаться на самого себя")
-        
+            raise serializers.ValidationError(
+                'Нельзя подписаться на самого себя')
         if Follow.objects.filter(user=user, following=following).exists():
-            raise serializers.ValidationError("Вы уже подписаны на этого пользователя")
-        
+            raise serializers.ValidationError(
+                'Вы уже подписаны на этого пользователя')
         return data
 
     def create(self, validated_data):
