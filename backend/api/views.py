@@ -1,16 +1,11 @@
 """backend/api/views.py."""
 
 import csv
+import logging
 from collections import defaultdict
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from api.filters import RecipeFilter
-from api.permissions import IsAuthorOrReadOnly
-from api.serializers import (AvatarUpdateSerializer, FavoriteSerializer,
-                             FollowSerializer, IngredientSerializer,
-                             RecipeSerializer, ShoppingCartSerializer,
-                             TagSerializer, UserSerializer)
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db.models import Exists, OuterRef, QuerySet
@@ -18,21 +13,55 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
-from food.constants import (MAX_PAGE_SIZE, PDF_FONT_BOLD, PDF_FONT_REGULAR,
-                            PDF_LINE_HEIGHT, PDF_MIN_Y, PDF_REGULAR_FONT_SIZE,
-                            PDF_START_X, PDF_START_Y, PDF_TITLE_FONT_SIZE,
-                            PDF_TITLE_Y, SHOPPING_LIST_CSV_FILENAME,
-                            SHOPPING_LIST_PDF_FILENAME,
-                            SHOPPING_LIST_TXT_FILENAME)
-from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
-                         ShoppingCart, Tag, User, generate_hash)
+from food.constants import (
+    MAX_PAGE_SIZE,
+    PDF_FONT_BOLD,
+    PDF_FONT_REGULAR,
+    PDF_LINE_HEIGHT,
+    PDF_MIN_Y,
+    PDF_REGULAR_FONT_SIZE,
+    PDF_START_X,
+    PDF_START_Y,
+    PDF_TITLE_FONT_SIZE,
+    PDF_TITLE_Y,
+    SHOPPING_LIST_CSV_FILENAME,
+    SHOPPING_LIST_PDF_FILENAME,
+    SHOPPING_LIST_TXT_FILENAME,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Profile,
+    Recipe,
+    ShoppingCart,
+    Tag,
+    User,
+    generate_hash,
+)
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.mixins import CreateModelMixin, ListModelMixin
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import (IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly)
+from rest_framework.permissions import (
+    IsAuthenticated,
+    IsAuthenticatedOrReadOnly,
+)
 from rest_framework.response import Response
+
+from api.filters import RecipeFilter
+from api.permissions import IsAuthorOrReadOnly
+from api.serializers import (
+    AvatarUpdateSerializer,
+    FavoriteSerializer,
+    FollowSerializer,
+    IngredientSerializer,
+    RecipeSerializer,
+    ShoppingCartSerializer,
+    TagSerializer,
+    UserSerializer,
+)
 
 
 def short_link_redirect(request: HttpRequest, short_link: str
@@ -420,72 +449,31 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         return response
 
 
-class FollowViewSet(viewsets.ModelViewSet, BaseViewSet):
+class FollowViewSet(ListModelMixin, CreateModelMixin, viewsets.GenericViewSet, BaseViewSet):
     """Управление подписками на пользователей."""
-
     queryset = Follow.objects.all()
     serializer_class = FollowSerializer
     pagination_class = PageNumberPagination
     http_method_names = ['get', 'post', 'delete']
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self) -> List[Follow]:
+    def get_queryset(self):
         """Возвращает подписки текущего пользователя."""
-        return Follow.objects.filter(user=self.request.user
-                                     ).select_related('following')
+        return Follow.objects.filter(user=self.request.user).select_related('following')
 
-    def get_serializer_context(self) -> Dict[str, Any]:
-        """Добавляет запрос в контекст сериализатора."""
+    def get_serializer_context(self):
+        """Добавляет запрос и following в контекст сериализатора."""
         context = super().get_serializer_context()
-        context['request'] = self.request
+        if 'id' in self.kwargs:  # Только для эндпоинтов с {id}
+            following_id = self.kwargs['id']
+            following = get_object_or_404(User, id=following_id)
+            context['following'] = following
         return context
 
-    def list(self, request, *args, **kwargs) -> Response:
-        """Возвращает список подписок текущего пользователя."""
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-
-    def create(self, request, *args, **kwargs) -> Response:
+    def create(self, request, *args, **kwargs):
         """Создает подписку на пользователя."""
-        following_id = kwargs.get('id')
-        if not following_id:
-            return Response(
-                {'errors': 'ID пользователя не указан'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        following = get_object_or_404(User, id=following_id)
-        if request.user == following:
-            return Response(
-                {'errors': 'Нельзя подписаться на самого себя'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if Follow.objects.filter(user=request.user, following=following
-                                 ).exists():
-            return Response(
-                {'errors': 'Вы уже подписаны на этого пользователя'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        follow = Follow.objects.create(user=request.user, following=following)
-        serializer = self.get_serializer(follow)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def destroy(self, request, *args, **kwargs) -> Response:
-        """Удаляет подписку на пользователя."""
-        following_id = kwargs.get('id')
-        following = get_object_or_404(User, id=following_id)
-        follow = Follow.objects.filter(
-            user=request.user,
-            following=following
-        ).first()
-        if not follow:
-            return Response(
-                {'errors': 'Вы не подписаны на этого пользователя'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        follow.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = self.get_serializer(data={})
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

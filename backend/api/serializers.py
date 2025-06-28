@@ -5,12 +5,26 @@ from typing import Any, Dict, List, Optional, Union
 
 from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
+from django.shortcuts import get_object_or_404
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
-from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
-                            MAX_LAST_NAME_LENGTH, MAX_USERNAME_LENGTH,
-                            MIN_COOKING_TIME, MIN_INGREDIENT_AMOUNT)
-from food.models import (Favorite, Follow, Ingredient, Recipe,
-                         RecipeIngredient, ShoppingCart, Tag, User)
+from food.constants import (
+    MAX_EMAIL_LENGTH,
+    MAX_FIRST_NAME_LENGTH,
+    MAX_LAST_NAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart,
+    Tag,
+    User,
+)
 from rest_framework import serializers, status
 
 
@@ -445,8 +459,7 @@ class ShoppingCartSerializer(serializers.ModelSerializer):
 
 class FollowSerializer(serializers.ModelSerializer):
     """Сериализатор для модели Follow (подписки на пользователей)."""
-
-    is_subscribed = IsFollowedField(source='following')
+    is_subscribed = IsFollowedField(source='following', read_only=True)
     email = serializers.ReadOnlyField(source='following.email')
     id = serializers.ReadOnlyField(source='following.id')
     username = serializers.ReadOnlyField(source='following.username')
@@ -457,24 +470,9 @@ class FollowSerializer(serializers.ModelSerializer):
         source='following.recipes.count',
         read_only=True
     )
-    avatar = Base64ImageField(source='following.profile.avatar')
-
-    def get_recipes(self, obj: Follow) -> List[Dict[str, Any]]:
-        """Получает список рецептов автора."""
-        request = self.context.get('request')
-        recipes = obj.following.recipes.all()
-        if request:
-            recipes_limit = request.query_params.get('recipes_limit')
-            if recipes_limit and str(recipes_limit).isdigit():
-                recipes = recipes[:int(recipes_limit)]
-        return RecipeFollowFieldSerializer(
-            recipes,
-            many=True,
-            context=self.context).data
+    avatar = Base64ImageField(source='following.profile.avatar', read_only=True)
 
     class Meta:
-        """Мета-класс для настройки сериализатора FollowSerializer."""
-
         model = Follow
         fields = (
             'email',
@@ -485,12 +483,38 @@ class FollowSerializer(serializers.ModelSerializer):
             'is_subscribed',
             'recipes',
             'recipes_count',
-            'avatar'
+            'avatar',
         )
 
-    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Проверяет, что пользователь не подписывается на самого себя."""
-        if self.context['request'].user == data['following']:
-            raise serializers.ValidationError(
-                'Нельзя подписаться на самого себя')
+    def get_recipes(self, obj):
+        """Получает список рецептов автора."""
+        request = self.context.get('request')
+        recipes = obj.following.recipes.all()
+        if request:
+            recipes_limit = request.query_params.get('recipes_limit')
+            if recipes_limit and recipes_limit.isdigit():
+                recipes = recipes[:int(recipes_limit)]
+        return RecipeFollowFieldSerializer(
+            recipes, many=True, context=self.context
+        ).data
+
+    def validate(self, data):
+        """Проверяет данные перед созданием подписки."""
+        following = self.context.get('following')  # получаем из контекста
+        user = self.context['request'].user
+        
+        if user == following:
+            raise serializers.ValidationError("Нельзя подписаться на самого себя")
+        
+        if Follow.objects.filter(user=user, following=following).exists():
+            raise serializers.ValidationError("Вы уже подписаны на этого пользователя")
+        
         return data
+
+    def create(self, validated_data):
+        """Создает подписку на пользователя."""
+        following = self.context.get('following')
+        return Follow.objects.create(
+            user=self.context['request'].user,
+            following=following
+        )
