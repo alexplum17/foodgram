@@ -4,6 +4,7 @@ import csv
 import os
 
 import django
+
 from food.models import Ingredient
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'foodgram.settings')

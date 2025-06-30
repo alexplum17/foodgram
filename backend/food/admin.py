@@ -2,8 +2,18 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
-                         RecipeIngredient, ShoppingCart, Tag, User)
+from django.db.models import Count
+
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart,
+    Tag,
+    User,
+)
 
 
 @admin.register(Tag)
@@ -42,10 +52,10 @@ class RecipeAdmin(admin.ModelAdmin):
     filter_horizontal = ('tags',)
     empty_value_display = '-пусто-'
 
+    @admin.display(description='Добавлений в избранное')
     def favorite_count(self, obj):
         """Возвращает количество добавлений рецепта в избранное."""
         return obj.favorite.count()
-    favorite_count.short_description = 'Добавлений в избранное'
 
 
 @admin.register(RecipeIngredient)
@@ -54,15 +64,6 @@ class RecipeIngredientAdmin(admin.ModelAdmin):
 
     list_display = ('recipe', 'ingredient', 'amount')
     search_fields = ('recipe__name', 'ingredient__name')
-    empty_value_display = '-пусто-'
-
-
-@admin.register(Profile)
-class ProfileAdmin(admin.ModelAdmin):
-    """Админ-панель для профилей пользователей."""
-
-    list_display = ('user',)
-    search_fields = ('user__username', 'user__email')
     empty_value_display = '-пусто-'
 
 
@@ -79,7 +80,7 @@ class FollowAdmin(admin.ModelAdmin):
 class FavoriteAdmin(admin.ModelAdmin):
     """Админ-панель для избранных рецептов."""
 
-    list_display = ('user', 'favorite')
+    list_display = ('user', 'recipe')
     search_fields = ('user__username', 'favorite__name')
     empty_value_display = '-пусто-'
 
@@ -97,24 +98,21 @@ class ShoppingCartAdmin(admin.ModelAdmin):
 class UserAdmin(BaseUserAdmin):
     """Админ-панель для пользователей."""
 
-    list_display = ('username',
-                    'email',
-                    'first_name',
-                    'last_name',
-                    'is_staff',
-                    'is_active'
-                    )
+    list_display = ('username', 'email', 'first_name', 'last_name',
+                    'is_staff', 'is_active', 'get_recipes_count',
+                    'get_followers_count')
     search_fields = ('username', 'email', 'first_name', 'last_name')
     list_filter = ('is_staff', 'is_active')
     empty_value_display = '-пусто-'
 
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        ('Personal info', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Permissions', {'fields':
-                         ('is_active', 'is_staff', 'is_superuser',
-                          'groups', 'user_permissions')}),
-        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        ('Персональная информация', {'fields': (
+            'first_name', 'last_name', 'email', 'avatar')}),
+        ('Права доступа', {'fields': (
+            'is_active', 'is_staff', 'is_superuser',
+            'groups', 'user_permissions')}),
+        ('Важные даты', {'fields': ('last_login', 'date_joined')}),
     )
 
     add_fieldsets = (
@@ -124,3 +122,21 @@ class UserAdmin(BaseUserAdmin):
                        'last_name', 'password1', 'password2'),
         }),
     )
+
+    def get_queryset(self, request):
+        """Подсчёт рецептов и подписчиков для пользователя одним запросом."""
+        return super().get_queryset(request).annotate(
+            recipes_count=Count('recipes'),
+            followers_count=Count('followers')
+        )
+
+    @admin.display(description='Количество рецептов', ordering='recipes_count')
+    def get_recipes_count(self, obj):
+        """Возвращает количество рецептов у пользователя."""
+        return obj.recipes_count()
+
+    @admin.display(description='Количество подписчиков',
+                   ordering='followers_count')
+    def get_followers_count(self, obj):
+        """Возвращает количество подписчиков у пользователя."""
+        return obj.followers_count()

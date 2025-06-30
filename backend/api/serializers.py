@@ -6,11 +6,24 @@ from typing import Any, Dict, List, Optional, Union
 from django.contrib.auth.models import AbstractUser
 from django.core.files.base import ContentFile
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
-from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
-                            MAX_LAST_NAME_LENGTH, MAX_USERNAME_LENGTH,
-                            MIN_COOKING_TIME, MIN_INGREDIENT_AMOUNT)
-from food.models import (Favorite, Follow, Ingredient, Recipe,
-                         RecipeIngredient, ShoppingCart, Tag, User)
+from food.constants import (
+    MAX_EMAIL_LENGTH,
+    MAX_FIRST_NAME_LENGTH,
+    MAX_LAST_NAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart,
+    Tag,
+    User,
+)
 from rest_framework import serializers, status
 
 
@@ -57,8 +70,8 @@ class AvatarUpdateSerializer(serializers.Serializer):
 
     def update(self, instance: User, validated_data: Dict[str, Any]) -> User:
         """Обновляет аватар пользователя."""
-        instance.profile.avatar = validated_data['avatar']
-        instance.profile.save()
+        instance.avatar = validated_data['avatar']
+        instance.save()
         return instance
 
 
@@ -232,7 +245,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователей."""
 
     is_subscribed = IsFollowedField(default=True)
-    avatar = Base64ImageField(source='profile.avatar', required=False)
+    avatar = Base64ImageField(required=False)
 
     class Meta:
         """Мета-класс для настройки сериализатора пользователей."""
@@ -457,7 +470,7 @@ class FollowSerializer(serializers.ModelSerializer):
         source='following.recipes.count',
         read_only=True
     )
-    avatar = Base64ImageField(source='following.profile.avatar',
+    avatar = Base64ImageField(source='following.avatar',
                               read_only=True)
 
     class Meta:

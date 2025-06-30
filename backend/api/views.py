@@ -5,34 +5,60 @@ from collections import defaultdict
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
-from api.filters import RecipeFilter
-from api.permissions import IsAuthorOrReadOnly
-from api.serializers import (AvatarUpdateSerializer, FavoriteSerializer,
-                             FollowSerializer, IngredientSerializer,
-                             RecipeSerializer, ShoppingCartSerializer,
-                             TagSerializer, UserSerializer)
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.core.exceptions import PermissionDenied
 from django.db.models import Exists, OuterRef, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
-from food.constants import (MAX_PAGE_SIZE, PDF_FONT_BOLD, PDF_FONT_REGULAR,
-                            PDF_LINE_HEIGHT, PDF_MIN_Y, PDF_REGULAR_FONT_SIZE,
-                            PDF_START_X, PDF_START_Y, PDF_TITLE_FONT_SIZE,
-                            PDF_TITLE_Y, SHOPPING_LIST_CSV_FILENAME,
-                            SHOPPING_LIST_PDF_FILENAME,
-                            SHOPPING_LIST_TXT_FILENAME)
-from food.models import (Favorite, Follow, Ingredient, Profile, Recipe,
-                         ShoppingCart, Tag, User, generate_hash)
+from food.constants import (
+    MAX_PAGE_SIZE,
+    PDF_FONT_BOLD,
+    PDF_FONT_REGULAR,
+    PDF_LINE_HEIGHT,
+    PDF_MIN_Y,
+    PDF_REGULAR_FONT_SIZE,
+    PDF_START_X,
+    PDF_START_Y,
+    PDF_TITLE_FONT_SIZE,
+    PDF_TITLE_Y,
+    SHOPPING_LIST_CSV_FILENAME,
+    SHOPPING_LIST_PDF_FILENAME,
+    SHOPPING_LIST_TXT_FILENAME,
+)
+from food.models import (
+    Favorite,
+    Follow,
+    Ingredient,
+    Recipe,
+    ShoppingCart,
+    Tag,
+    User,
+    generate_hash,
+)
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import (IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly)
+from rest_framework.permissions import (
+    IsAuthenticated,
+    IsAuthenticatedOrReadOnly,
+)
 from rest_framework.response import Response
+
+from api.filters import RecipeFilter
+from api.permissions import IsAuthorOrReadOnly
+from api.serializers import (
+    AvatarUpdateSerializer,
+    FavoriteSerializer,
+    FollowSerializer,
+    IngredientSerializer,
+    RecipeSerializer,
+    ShoppingCartSerializer,
+    TagSerializer,
+    UserSerializer,
+)
 
 
 def short_link_redirect(request: HttpRequest, short_link: str
@@ -95,10 +121,6 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
     def avatar(self, request: HttpRequest) -> Response:
         """Управление аватаром пользователя."""
         user = request.user
-        try:
-            profile = user.profile
-        except ObjectDoesNotExist:
-            profile = Profile.objects.create(user=user)
         if request.method == 'PUT':
             serializer = AvatarUpdateSerializer(data=request.data)
             if not serializer.is_valid():
@@ -106,17 +128,17 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
                                 status=status.HTTP_400_BAD_REQUEST)
             serializer.update(user, serializer.validated_data)
             return Response(
-                {'avatar': profile.avatar.url},
+                {'avatar': user.avatar.url if user.avatar else None},
                 status=status.HTTP_200_OK
             )
-        if not profile.avatar:
+        if not user.avatar:
             return Response(
                 {"detail": "Аватар не найден"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        profile.avatar.delete()
-        profile.avatar = None
-        profile.save()
+        user.avatar.delete()
+        user.avatar = None
+        user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'],

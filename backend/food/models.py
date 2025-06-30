@@ -2,9 +2,12 @@
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, RegexValidator
+from django.core.validators import MinValueValidator
 from django.db import models
+from hashids import Hashids
+
 from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
                             MAX_INGREDIENT_NAME_LENGTH, MAX_LAST_NAME_LENGTH,
                             MAX_MEASUREMENT_UNIT_LENGTH,
@@ -13,7 +16,6 @@ from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
                             MAX_USERNAME_LENGTH, MIN_COOKING_TIME,
                             MIN_INGREDIENT_AMOUNT, SHORT_LINK_ALPHABET,
                             SHORT_LINK_MIN_LENGTH)
-from hashids import Hashids
 
 
 def generate_hash(recipe_id: int) -> str:
@@ -44,26 +46,36 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self,
-                         username: str,
                          email: str,
+                         username: str,
+                         first_name: str,
+                         last_name: str,
                          password: str = None,
                          **extra_fields
                          ) -> 'User':
         """Создает и сохраняет суперпользователя."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        return self.create_user(username, email, password, **extra_fields)
+        return self.create_user(
+            email,
+            username,
+            first_name,
+            last_name,
+            password,
+            **extra_fields
+        )
 
 
 class User(AbstractUser):
     """Кастомная модель пользователя."""
 
+    username_validator = UnicodeUsernameValidator()
     username = models.CharField(
         max_length=MAX_USERNAME_LENGTH,
         blank=False,
         unique=True,
         help_text='Обязательное поле. Максимум 150 символов.',
-        validators=[AbstractUser.username_validator],
+        validators=[UnicodeUsernameValidator],
         error_messages={
             'unique': 'Пользователь с таким именем уже существует.',
         },
@@ -83,6 +95,12 @@ class User(AbstractUser):
         max_length=MAX_LAST_NAME_LENGTH,
         blank=False,
         verbose_name='Фамилия'
+    )
+    avatar = models.ImageField(
+        upload_to='users/avatars/',
+        blank=True,
+        default='',
+        verbose_name='Аватар'
     )
     objects = UserManager()
 
@@ -113,10 +131,6 @@ class Tag(models.Model):
         verbose_name='Уникальный идентификатор',
         help_text='Введите уникальный идентификатор тега',
         max_length=MAX_TAG_SLUG_LENGTH,
-        validators=[RegexValidator(
-            regex='^[-a-zA-Z0-9_]+$',
-            message='Разрешены только цифры и буквы'
-        )]
     )
 
     class Meta:
@@ -285,32 +299,6 @@ class RecipeIngredient(models.Model):
                 f'{self.ingredient.name} для рецепта {self.recipe.name}')
 
 
-class Profile(models.Model):
-    """Модель профиля пользователя для хранения дополнительных данных."""
-
-    user = models.OneToOneField(
-        User,
-        on_delete=models.CASCADE,
-        related_name='profile'
-    )
-    avatar = models.ImageField(
-        upload_to='users/avatars/',
-        blank=True,
-        null=True
-    )
-
-    class Meta:
-        """Мета-класс для модели Profile."""
-
-        verbose_name = 'Профиль'
-        verbose_name_plural = 'Профили'
-        ordering = ['user']
-
-    def __str__(self) -> str:
-        """Возвращает строковое представление профиля."""
-        return f'Профиль пользователя {self.user.username}'
-
-
 class Follow(models.Model):
     """Модель подписки пользователей друг на друга."""
 
@@ -352,68 +340,65 @@ class Follow(models.Model):
                 f'подписан на {self.following.username}')
 
 
-class Favorite(models.Model):
-    """Модель для хранения избранных рецептов пользователей."""
+class UserRecipeBaseModel(models.Model):
+    """
+    Абстрактная базовая модель для связей пользователь-рецепт.
+
+    Содержит общие поля и методы для Favorite и ShoppingCart.
+    """
 
     user = models.ForeignKey(
-        User,
+        'User',
         on_delete=models.CASCADE,
         verbose_name='Пользователь'
     )
-    favorite = models.ForeignKey(
-        Recipe,
-        on_delete=models.CASCADE,
-        related_name='favorite',
-        verbose_name='Избранное'
-    )
-
-    class Meta:
-        """Мета-класс для модели Favorite."""
-
-        constraints = [
-            models.UniqueConstraint(
-                fields=['user', 'favorite'],
-                name='unique_favorite'
-            )
-        ]
-        verbose_name = 'Избранное'
-        verbose_name_plural = 'Избранное'
-
-    def __str__(self) -> str:
-        """Возвращает строковое представление избранного рецепта."""
-        return (f'Пользователь {self.user.username} '
-                f'добавил в избранное {self.favorite.name}')
-
-
-class ShoppingCart(models.Model):
-    """Модель для хранения рецептов в списке покупок пользователя."""
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        verbose_name='Пользователь',
-        related_name='shopping_cart'
-    )
     recipe = models.ForeignKey(
-        Recipe,
+        'Recipe',
         on_delete=models.CASCADE,
-        related_name='shopping_cart',
-        verbose_name='Рецепт в списке покупок'
+        verbose_name='Рецепт'
     )
 
     class Meta:
-        """Мета-класс для модели ShoppingCart."""
+        """Мета-класс для абстрактной модели UserRecipeBaseModel."""
 
+        abstract = True
         constraints = [
             models.UniqueConstraint(
                 fields=['user', 'recipe'],
-                name='unique_shopping_cart'
+                name='unique_%(app_label)s_%(class)s'
             )
         ]
+
+    def __str__(self):
+        """Возвращает строковое представление связи пользователя и рецепта."""
+        return f'{self.user.username} - {self.recipe.name}'
+
+
+class Favorite(UserRecipeBaseModel):
+    """Модель для хранения избранных рецептов пользователей."""
+
+    class Meta(UserRecipeBaseModel.Meta):
+        """Мета-класс для модели Favorite."""
+
+        verbose_name = 'Избранное'
+        verbose_name_plural = 'Избранные рецепты'
+
+    def __str__(self):
+        """Возвращает строковое представление избранного рецепта."""
+        return (f'Пользователь {self.user.username} '
+                f'добавил в избранное {self.recipe.name}')
+
+
+class ShoppingCart(UserRecipeBaseModel):
+    """Модель для хранения рецептов в списке покупок пользователя."""
+
+    class Meta(UserRecipeBaseModel.Meta):
+        """Мета-класс для модели ShoppingCart."""
+
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
 
-    def __str__(self) -> str:
+    def __str__(self):
         """Возвращает строковое представление списка покупок."""
         return (f'Пользователь {self.user.username} '
                 f'добавил в список покупок {self.recipe.name}')
