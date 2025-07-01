@@ -140,7 +140,7 @@ class TagSerializer(serializers.ModelSerializer):
         """Мета-класс для настройки сериализатора тегов."""
 
         model = Tag
-        fields = ('id', 'name', 'slug')
+        fields = ('__all__')
 
 
 class IngredientSerializer(serializers.ModelSerializer):
@@ -153,7 +153,7 @@ class IngredientSerializer(serializers.ModelSerializer):
         """Мета-класс для настройки сериализатора ингредиентов."""
 
         model = Ingredient
-        fields = ('id', 'name', 'measurement_unit')
+        fields = ('__all__')
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
