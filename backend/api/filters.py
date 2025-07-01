@@ -1,7 +1,6 @@
 """backend/api/filters.py."""
 
 from django_filters import rest_framework as filters
-
 from food.models import Recipe, Tag
 
 
@@ -33,5 +32,5 @@ class RecipeFilter(filters.FilterSet):
     def filter_is_in_shopping_cart(self, queryset, name, value):
         """Фильтрует рецепты в списке покупок."""
         if value and self.request.user.is_authenticated:
-            return queryset.filter(shopping_cart__user=self.request.user)
+            return queryset.filter(shoppingcart__user=self.request.user)
         return queryset

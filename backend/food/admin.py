@@ -55,7 +55,7 @@ class RecipeAdmin(admin.ModelAdmin):
     @admin.display(description='Добавлений в избранное')
     def favorite_count(self, obj):
         """Возвращает количество добавлений рецепта в избранное."""
-        return obj.favorite.count()
+        return Favorite.objects.filter(recipe=obj).count()
 
 
 @admin.register(RecipeIngredient)
@@ -99,8 +99,8 @@ class UserAdmin(BaseUserAdmin):
     """Админ-панель для пользователей."""
 
     list_display = ('username', 'email', 'first_name', 'last_name',
-                    'is_staff', 'is_active', 'get_recipes_count',
-                    'get_followers_count')
+                    'is_staff', 'is_active', 'recipe_count',
+                    'favorite_count')
     search_fields = ('username', 'email', 'first_name', 'last_name')
     list_filter = ('is_staff', 'is_active')
     empty_value_display = '-пусто-'
@@ -123,20 +123,12 @@ class UserAdmin(BaseUserAdmin):
         }),
     )
 
-    def get_queryset(self, request):
-        """Подсчёт рецептов и подписчиков для пользователя одним запросом."""
-        return super().get_queryset(request).annotate(
-            recipes_count=Count('recipes'),
-            followers_count=Count('followers')
-        )
+    @admin.display(description='Рецептов создано')
+    def recipe_count(self, obj):
+        """Количество рецептов пользователя."""
+        return Recipe.objects.filter(author=obj).count()
 
-    @admin.display(description='Количество рецептов', ordering='recipes_count')
-    def get_recipes_count(self, obj):
-        """Возвращает количество рецептов у пользователя."""
-        return obj.recipes_count()
-
-    @admin.display(description='Количество подписчиков',
-                   ordering='followers_count')
-    def get_followers_count(self, obj):
-        """Возвращает количество подписчиков у пользователя."""
-        return obj.followers_count()
+    @admin.display(description='Рецептов в избранном')
+    def favorite_count(self, obj):
+        """Количество рецептов в избранном у пользователя."""
+        return Favorite.objects.filter(user=obj).count()

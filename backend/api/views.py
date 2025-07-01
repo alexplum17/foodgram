@@ -233,7 +233,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
                 is_favorited=Exists(
                     Favorite.objects.filter(
                         user=self.request.user,
-                        favorite=OuterRef('pk')
+                        recipe=OuterRef('pk')
                     )
                 ),
                 is_in_shopping_cart=Exists(
@@ -324,7 +324,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         if request.method == 'POST':
             if Favorite.objects.filter(
                 user=request.user,
-                favorite=recipe
+                recipe=recipe
             ).exists():
                 return Response(
                     {'errors': 'Рецепт уже в избранном'},
@@ -332,13 +332,13 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
                 )
             favorite = Favorite.objects.create(
                 user=request.user,
-                favorite=recipe
+                recipe=recipe
             )
             serializer = FavoriteSerializer(favorite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         favorite = Favorite.objects.filter(
             user=request.user,
-            favorite=recipe
+            recipe=recipe
         ).first()
         if not favorite:
             return Response(
@@ -388,7 +388,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         if recipe_ids:
             try:
                 recipe_ids = [int(id) for id in recipe_ids.split(',')]
-                shopping_cart = user.shopping_cart.filter(
+                shopping_cart = user.shoppingcart_set.filter(
                     recipe_id__in=recipe_ids
                 )
             except ValueError:
@@ -397,7 +397,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         else:
-            shopping_cart = user.shopping_cart.all()
+            shopping_cart = user.shoppingcart_set.all()
         ingredients = defaultdict(int)
         for item in shopping_cart:
             for ri in item.recipe.recipe_ingredients.all():

@@ -79,21 +79,14 @@ class IsFavoritedField(serializers.Field):
     """Кастомное поле для проверки, находится ли рецепт в избранном."""
 
     def to_representation(self, obj: Recipe) -> bool:
-        """Проверяет, добавлен ли рецепт в избранное.
-
-        Args:
-            obj: Объект рецепта для проверки
-
-        Returns:
-            bool: True если рецепт в избранном, иначе False
-        """
+        """Проверяет, добавлен ли рецепт в избранное."""
         if hasattr(obj, 'is_favorited'):
             return obj.is_favorited
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return Favorite.objects.filter(
                 user=request.user,
-                favorite=obj
+                recipe=obj
             ).exists()
         return False
 
@@ -430,9 +423,9 @@ class RecipeSerializer(serializers.ModelSerializer):
 class FavoriteSerializer(serializers.ModelSerializer):
     """Сериализатор для модели Favorite (избранные рецепты)."""
 
-    name = serializers.ReadOnlyField(source='favorite.name')
-    image = Base64ImageField(source='favorite.image')
-    cooking_time = serializers.ReadOnlyField(source='favorite.cooking_time')
+    name = serializers.ReadOnlyField(source='recipe.name')
+    image = Base64ImageField(source='recipe.image')
+    cooking_time = serializers.ReadOnlyField(source='recipe.cooking_time')
 
     class Meta:
         """Мета-класс для настройки сериализатора FavoriteSerializer."""
