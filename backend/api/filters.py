@@ -2,6 +2,7 @@
 
 from django_filters import rest_framework as filters
 from food.models import Recipe, Tag
+from rest_framework import filters as drf_filters
 
 
 class RecipeFilter(filters.FilterSet):
@@ -34,3 +35,15 @@ class RecipeFilter(filters.FilterSet):
         if value and self.request.user.is_authenticated:
             return queryset.filter(shoppingcart_recipe__user=self.request.user)
         return queryset
+
+
+class IngredientSearchFilter(drf_filters.SearchFilter):
+    """Фильтр для поиска ингредиентов по начальным буквам названия."""
+
+    def filter_queryset(self, request, queryset, view):
+        """Фильтрует queryset по параметру 'name'."""
+        search_query = self.get_search_terms(request)
+        if not search_query:
+            return queryset
+        search_term = search_query[0]
+        return queryset.filter(name__istartswith=search_term)

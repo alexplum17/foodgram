@@ -81,6 +81,8 @@ class IsFavoritedField(serializers.Field):
 
     def to_representation(self, value: Recipe) -> bool:
         """Проверяет, добавлен ли рецепт в избранное."""
+        if isinstance(value, bool):
+            return value
         if value is None or not isinstance(value, Recipe):
             return False
         request = self.context.get('request')
@@ -94,6 +96,8 @@ class IsInShoppingCartField(serializers.Field):
 
     def to_representation(self, value: Recipe) -> bool:
         """Проверяет, добавлен ли рецепт в корзину у текущего пользователя."""
+        if isinstance(value, bool):
+            return value
         if value is None or not isinstance(value, Recipe):
             return False
         request = self.context.get('request')
