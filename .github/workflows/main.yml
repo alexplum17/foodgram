@@ -37,7 +37,7 @@ jobs:
         pip install flake8==6.0.0 flake8-isort==6.0.0
         pip install -r ./backend/requirements.txt
         
-    - name: Test with flake8 and django tests
+    - name: Test with flake8
       env:  # Переменные окружения для тестов
         POSTGRES_USER: django_user
         POSTGRES_PASSWORD: mysecretpassword
@@ -45,7 +45,8 @@ jobs:
         DB_HOST: 127.0.0.1  # Хост PostgreSQL
         DB_PORT: 5432  # Порт PostgreSQL
       run: | # Проверка стиля кода
-        python -m flake8 backend/  
+        cd backend/
+        python -m flake8 .  
 
   # Job 2: Сборка и публикация образа бэкенда
   build_backend_and_push_to_docker_hub:
