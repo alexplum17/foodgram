@@ -158,27 +158,14 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
         """Создает/удаляет подписку на пользователя."""
         user = request.user
         following = get_object_or_404(User, id=kwargs['id'])
+        serializer = self.get_serializer(data=request.data, context={
+            'request': request,
+            'following': following
+        })
         if request.method == 'POST':
-            if user == following:
-                return Response(
-                    {'errors': 'Нельзя подписаться на самого себя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if user.following.filter(following=following).exists():
-                return Response(
-                    {'errors': 'Вы уже подписаны на этого пользователя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            follow = user.following.create(following=following)
-            serializer = FollowSerializer(
-                follow,
-                context={'request': request}
-            )
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED,
-                headers=self.get_success_headers(serializer.data)
-            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         follow = user.following.filter(following=following).first()
         if not follow:
             return Response(
@@ -192,8 +179,10 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
             url_path='subscriptions')
     def subscriptions(self, request: HttpRequest) -> Response:
         """Возвращает список подписок текущего пользователя."""
-        queryset = Follow.objects.filter(user=request.user
-                                         ).select_related('following')
+        queryset: QuerySet[Follow] = (
+            request.user.following.all()
+            .select_related('following')
+        )
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page, many=True)
         return self.get_paginated_response(serializer.data)
@@ -312,7 +301,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
 
     @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
-    def favorite(self, request, pk=None):
+    def favorite(self, request, pk: Optional[int] = None) -> Response:
         """Добавление/удаление рецепта в избранное."""
         return self._handle_recipe_action(
             request=request,
@@ -323,7 +312,8 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
 
     @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
-    def shopping_cart(self, request, pk=None):
+    def shopping_cart(self, request,
+                      pk: Optional[int] = None) -> Response:
         """Добавление/удаление рецепта из списка покупок."""
         return self._handle_recipe_action(
             request=request,
@@ -332,12 +322,14 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
             exists_message='Рецепт уже в списке покупок'
         )
 
-    def _handle_recipe_action(self,
-                              request,
-                              action_type,
-                              serializer_class,
-                              exists_message
-                              ):
+    def _handle_recipe_action(
+        self,
+        request,
+        action_type: str,
+        serializer_class,
+        exists_message: str
+    ) -> Response:
+        """Обработка действий с рецептами (избранное, список покупок)."""
         recipe = self.get_object()
         if action_type == 'favorite':
             relation_manager = request.user.favorite_user
@@ -359,6 +351,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
             relation = relation_manager.create(recipe=recipe)
             serializer = serializer_class(relation)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         relation = relation_manager.filter(recipe=recipe).first()
         if not relation:
             return Response(

@@ -113,9 +113,7 @@ class IsFollowedField(serializers.Field):
         """Проверяет, подписан ли текущий пользователь на автора."""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return Follow.objects.filter(
-                user=request.user,
-                following=obj
+            return request.user.following.filter(
             ).exists()
         return False
 
@@ -481,23 +479,15 @@ class FollowSerializer(serializers.ModelSerializer):
         source='following.recipes.count',
         read_only=True
     )
-    avatar = Base64ImageField(source='following.avatar',
-                              read_only=True)
+    avatar = Base64ImageField(source='following.avatar', read_only=True)
 
     class Meta:
         """Мета-класс для настройки сериализатора FollowSerializer."""
 
         model = Follow
         fields = (
-            'email',
-            'id',
-            'username',
-            'first_name',
-            'last_name',
-            'is_subscribed',
-            'recipes',
-            'recipes_count',
-            'avatar',
+            'email', 'id', 'username', 'first_name', 'last_name',
+            'is_subscribed', 'recipes', 'recipes_count', 'avatar'
         )
 
     def get_recipes(self, obj):
@@ -517,19 +507,23 @@ class FollowSerializer(serializers.ModelSerializer):
             recipes, many=True, context=self.context
         ).data
 
-    def validate(self, data):
+    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Проверяет данные перед созданием подписки."""
         following = self.context.get('following')
         user = self.context['request'].user
         if user == following:
             raise serializers.ValidationError(
-                'Нельзя подписаться на самого себя')
-        if Follow.objects.filter(user=user, following=following).exists():
+                {'errors': 'Нельзя подписаться на самого себя'},
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        if user.following.filter(following=following).exists():
             raise serializers.ValidationError(
-                'Вы уже подписаны на этого пользователя')
+                {'errors': 'Вы уже подписаны на этого пользователя'},
+                code=status.HTTP_400_BAD_REQUEST
+            )
         return data
 
-    def create(self, validated_data):
+    def create(self, validated_data: Dict[str, Any]) -> Follow:
         """Создает подписку на пользователя."""
         following = self.context.get('following')
         return Follow.objects.create(
