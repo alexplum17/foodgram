@@ -5,64 +5,34 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
-from django.db.models import (
-    BooleanField,
-    Exists,
-    OuterRef,
-    QuerySet,
-    Sum,
-    Value,
-)
+from django.db.models import (BooleanField, Exists, OuterRef, QuerySet, Sum,
+                              Value)
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
-from food.constants import (
-    MAX_PAGE_SIZE,
-    PDF_FONT_BOLD,
-    PDF_FONT_REGULAR,
-    PDF_LINE_HEIGHT,
-    PDF_MIN_Y,
-    PDF_REGULAR_FONT_SIZE,
-    PDF_START_X,
-    PDF_START_Y,
-    PDF_TITLE_FONT_SIZE,
-    PDF_TITLE_Y,
-    SHOPPING_LIST_CSV_FILENAME,
-    SHOPPING_LIST_PDF_FILENAME,
-    SHOPPING_LIST_TXT_FILENAME,
-)
-from food.models import (
-    Follow,
-    Ingredient,
-    Recipe,
-    RecipeIngredient,
-    Tag,
-    User,
-    generate_hash,
-)
 from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import (
-    IsAuthenticated,
-    IsAuthenticatedOrReadOnly,
-)
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
 
 from api.filters import IngredientSearchFilter, RecipeFilter
 from api.permissions import IsAuthorOrReadOnly
-from api.serializers import (
-    AvatarUpdateSerializer,
-    FavoriteSerializer,
-    FollowSerializer,
-    IngredientSerializer,
-    RecipeSerializer,
-    ShoppingCartSerializer,
-    TagSerializer,
-    UserSerializer,
-)
+from api.serializers import (AvatarUpdateSerializer, FavoriteSerializer,
+                             FollowSerializer, IngredientSerializer,
+                             RecipeSerializer, ShoppingCartSerializer,
+                             TagSerializer, UserSerializer)
+from food.constants import (MAX_PAGE_SIZE, PDF_FONT_BOLD, PDF_FONT_REGULAR,
+                            PDF_LINE_HEIGHT, PDF_MIN_Y, PDF_REGULAR_FONT_SIZE,
+                            PDF_START_X, PDF_START_Y, PDF_TITLE_FONT_SIZE,
+                            PDF_TITLE_Y, SHOPPING_LIST_CSV_FILENAME,
+                            SHOPPING_LIST_PDF_FILENAME,
+                            SHOPPING_LIST_TXT_FILENAME)
+from food.models import (Follow, Ingredient, Recipe, RecipeIngredient, Tag,
+                         User, generate_hash)
 
 
 def short_link_redirect(request: HttpRequest, short_link: str
