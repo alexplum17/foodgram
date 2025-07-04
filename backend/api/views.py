@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
-from django.db.models import Exists, OuterRef, QuerySet
+from django.db.models import BooleanField, Exists, OuterRef, QuerySet, Value
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
@@ -231,23 +231,20 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         if self.request.user.is_authenticated:
             queryset = queryset.annotate(
                 is_favorited=Exists(
-                    Favorite.objects.filter(
-                        user=self.request.user,
+                    self.request.user.favorite_user.filter(
                         recipe=OuterRef('pk')
-                    )
+                    ), output_field=BooleanField()
                 ),
                 is_in_shopping_cart=Exists(
-                    ShoppingCart.objects.filter(
-                        user=self.request.user,
+                    self.request.user.shoppingcart_user.filter(
                         recipe=OuterRef('pk')
-                    )
+                    ), output_field=BooleanField()
                 )
             )
         else:
-            from django.db.models import Value
             queryset = queryset.annotate(
-                is_favorited=Value(False),
-                is_in_shopping_cart=Value(False)
+                is_favorited=Value(False, output_field=BooleanField()),
+                is_in_shopping_cart=Value(False, output_field=BooleanField())
             )
         return queryset
 
@@ -322,24 +319,15 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         """Добавление/удаление рецепта из избранного."""
         recipe = self.get_object()
         if request.method == 'POST':
-            if Favorite.objects.filter(
-                user=request.user,
-                recipe=recipe
-            ).exists():
+            if request.user.favorite_user.filter(recipe=recipe).exists():
                 return Response(
                     {'errors': 'Рецепт уже в избранном'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            favorite = Favorite.objects.create(
-                user=request.user,
-                recipe=recipe
-            )
+            favorite = request.user.favorite_user.create(recipe=recipe)
             serializer = FavoriteSerializer(favorite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        favorite = Favorite.objects.filter(
-            user=request.user,
-            recipe=recipe
-        ).first()
+        favorite = request.user.favorite_user.filter(recipe=recipe).first()
         if not favorite:
             return Response(
                 {'errors': 'Рецепта нет в избранном'},
@@ -355,21 +343,17 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         """Добавление/удаление рецепта из списка покупок."""
         recipe = self.get_object()
         if request.method == 'POST':
-            if ShoppingCart.objects.filter(user=request.user,
-                                           recipe=recipe
-                                           ).exists():
+            if request.user.shoppingcart_user.filter(recipe=recipe).exists():
                 return Response(
                     {'errors': 'Рецепт уже в списке покупок'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            shopping_cart = ShoppingCart.objects.create(
-                user=request.user, recipe=recipe
-            )
+            shopping_cart = request.user.shoppingcart_user.create(
+                recipe=recipe)
             serializer = ShoppingCartSerializer(shopping_cart)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        shopping_cart = ShoppingCart.objects.filter(
-            user=request.user, recipe=recipe
-        ).first()
+        shopping_cart = request.user.shoppingcart_user.filter(recipe=recipe
+                                                              ).first()
         if not shopping_cart:
             return Response(
                 {'errors': 'Рецепта нет в списке покупок'},
@@ -388,7 +372,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
         if recipe_ids:
             try:
                 recipe_ids = [int(id) for id in recipe_ids.split(',')]
-                shopping_cart = user.shoppingcart_set.filter(
+                shopping_cart = user.shoppingcart_user.filter(
                     recipe_id__in=recipe_ids
                 )
             except ValueError:
@@ -397,7 +381,7 @@ class RecipeViewSet(viewsets.ModelViewSet, BaseViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         else:
-            shopping_cart = user.shoppingcart_set.all()
+            shopping_cart = user.shoppingcart_user.all()
         ingredients = defaultdict(int)
         for item in shopping_cart:
             for ri in item.recipe.recipe_ingredients.all():
