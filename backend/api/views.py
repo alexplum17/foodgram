@@ -72,6 +72,12 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
     http_method_names = ['get', 'post', 'put', 'delete']
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def get_serializer_context(self):
+        """Добавляет запрос в контекст сериализатора."""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
     def get_serializer_class(self) -> Any:
         """Определяет класс сериализатора в зависимости от действия."""
         if self.action in ['create', 'set_password']:
@@ -79,6 +85,22 @@ class UserViewSet(DjoserUserViewSet, BaseViewSet):
         elif self.action in ['subscribe', 'subscriptions']:
             return FollowSerializer
         return UserSerializer
+
+    def get_queryset(self):
+        """Оптимизирует запросы."""
+        queryset = super().get_queryset()
+        if self.action == 'list':
+            request = self.request
+            if request and request.user.is_authenticated:
+                queryset = queryset.annotate(
+                    is_subscribed=Exists(
+                        Follow.objects.filter(
+                            user=request.user,
+                            following=OuterRef('pk')
+                        )
+                    )
+                )
+        return queryset
 
     @action(['post'], detail=False, permission_classes=[IsAuthenticated])
     def set_password(self, request: HttpRequest, *args: Any, **kwargs: Any

@@ -220,7 +220,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователей."""
 
-    is_subscribed = IsFollowedField(default=True)
+    is_subscribed = serializers.SerializerMethodField()
     avatar = Base64ImageField(required=False)
 
     class Meta:
@@ -237,12 +237,11 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar'
         )
 
-    def to_representation(self, instance: User) -> Dict[str, Any]:
-        """Переопределяет представление для отображения подписки."""
-        representation = super().to_representation(instance)
-        representation['is_subscribed'] = IsFollowedField(
-        ).to_representation(instance)
-        return representation
+    def get_is_subscribed(self, obj):
+        """Проверяет, подписан ли текущий пользователь на автора."""
+        field = IsFollowedField()
+        field._context = self.context
+        return field.to_representation(obj)
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):
@@ -455,7 +454,9 @@ class ShoppingCartSerializer(serializers.ModelSerializer):
 class FollowSerializer(serializers.ModelSerializer):
     """Сериализатор для модели Follow (подписки на пользователей)."""
 
-    is_subscribed = IsFollowedField(source='following', read_only=True)
+    is_subscribed = IsFollowedField(source='following',
+                                    read_only=True,
+                                    default=True)
     email = serializers.ReadOnlyField(source='following.email')
     id = serializers.ReadOnlyField(source='following.id')
     username = serializers.ReadOnlyField(source='following.username')
