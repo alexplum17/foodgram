@@ -8,22 +8,14 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from hashids import Hashids
 
-from food.constants import (
-    MAX_EMAIL_LENGTH,
-    MAX_FIRST_NAME_LENGTH,
-    MAX_INGREDIENT_NAME_LENGTH,
-    MAX_LAST_NAME_LENGTH,
-    MAX_MEASUREMENT_UNIT_LENGTH,
-    MAX_RECIPE_NAME_LENGTH,
-    MAX_SHORT_LINK_LENGTH,
-    MAX_TAG_NAME_LENGTH,
-    MAX_TAG_SLUG_LENGTH,
-    MAX_USERNAME_LENGTH,
-    MIN_COOKING_TIME,
-    MIN_INGREDIENT_AMOUNT,
-    SHORT_LINK_ALPHABET,
-    SHORT_LINK_MIN_LENGTH,
-)
+from food.constants import (MAX_EMAIL_LENGTH, MAX_FIRST_NAME_LENGTH,
+                            MAX_INGREDIENT_NAME_LENGTH, MAX_LAST_NAME_LENGTH,
+                            MAX_MEASUREMENT_UNIT_LENGTH,
+                            MAX_RECIPE_NAME_LENGTH, MAX_SHORT_LINK_LENGTH,
+                            MAX_TAG_NAME_LENGTH, MAX_TAG_SLUG_LENGTH,
+                            MAX_USERNAME_LENGTH, MIN_COOKING_TIME,
+                            MIN_INGREDIENT_AMOUNT, SHORT_LINK_ALPHABET,
+                            SHORT_LINK_MIN_LENGTH)
 
 
 def generate_hash(recipe_id: int) -> str:
