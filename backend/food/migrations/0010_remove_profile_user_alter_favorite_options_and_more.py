@@ -17,6 +17,9 @@ class Migration(migrations.Migration):
             model_name='profile',
             name='user',
         ),
+        migrations.DeleteModel(
+            name='Profile',
+        ),
         migrations.AlterModelOptions(
             name='favorite',
             options={'verbose_name': 'Избранное', 'verbose_name_plural': 'Избранные рецепты'},
@@ -25,19 +28,14 @@ class Migration(migrations.Migration):
             model_name='favorite',
             name='unique_favorite',
         ),
+        migrations.RenameField(
+            model_name='favorite',
+            old_name='favorite',
+            new_name='recipe',
+        ),
         migrations.RemoveConstraint(
             model_name='shoppingcart',
             name='unique_shopping_cart',
-        ),
-        migrations.RemoveField(
-            model_name='favorite',
-            name='favorite',
-        ),
-        migrations.AddField(
-            model_name='favorite',
-            name='recipe',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, to='food.recipe', verbose_name='Рецепт'),
-            preserve_default=False,
         ),
         migrations.AddField(
             model_name='user',
@@ -57,12 +55,19 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='tag',
             name='slug',
-            field=models.SlugField(help_text='Введите уникальный идентификатор тега', max_length=32, unique=True, verbose_name='Уникальный идентификатор'),
+            field=models.SlugField(help_text='Введите уникальный идентификатор тега',
+                                   max_length=32,
+                                   unique=True,
+                                   verbose_name='Уникальный идентификатор'),
         ),
         migrations.AlterField(
             model_name='user',
             name='username',
-            field=models.CharField(error_messages={'unique': 'Пользователь с таким именем уже существует.'}, help_text='Обязательное поле. Максимум 150 символов.', max_length=150, unique=True, validators=[django.contrib.auth.validators.UnicodeUsernameValidator]),
+            field=models.CharField(error_messages={'unique': 'Пользователь с таким именем уже существует.'},
+                                   help_text='Обязательное поле. Максимум 150 символов.',
+                                   max_length=150,
+                                   unique=True,
+                                   validators=[django.contrib.auth.validators.UnicodeUsernameValidator]),
         ),
         migrations.AddConstraint(
             model_name='favorite',
@@ -71,8 +76,5 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='shoppingcart',
             constraint=models.UniqueConstraint(fields=('user', 'recipe'), name='unique_food_shoppingcart'),
-        ),
-        migrations.DeleteModel(
-            name='Profile',
         ),
     ]
