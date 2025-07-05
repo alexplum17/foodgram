@@ -101,8 +101,7 @@ class IsFollowedField(serializers.Field):
         """Проверяет, подписан ли текущий пользователь на автора."""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return request.user.following.filter(
-            ).exists()
+            return request.user.following.filter(following=obj).exists()
         return False
 
 
