@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import environ
+
 from food.constants import DEFAULT_PAGE_SIZE
 
 BASE_DIR = Path(__file__).resolve().parent.parent
